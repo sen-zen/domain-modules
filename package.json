@@ -1,0 +1,32 @@
+{
+  "name": "@tastehub/core",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "pnpm run clean && tsdown",
+    "clean": "rm -rf dist",
+    "test": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@tastehub/prisma": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "9.0.3",
+    "tsdown": "^0.22.3",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "mobx": "6.16.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "9.0.3",
+    "vitest": "3.2.4"
+  }
+}

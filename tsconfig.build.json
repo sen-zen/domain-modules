@@ -1,0 +1,17 @@
+{
+    "extends": "../../tsconfig.build.json",
+    "include": [
+        "src"
+    ],
+    "compilerOptions": {
+        "declarationDir": "dist",
+        "types": [
+            "node"
+        ],
+        "paths": {
+            "@domain/*": [
+                "./src/domain/*"
+            ]
+        }
+    }
+}

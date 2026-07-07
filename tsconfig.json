@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "src"
+  ],
+  "compilerOptions": {
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "lib": [
+      "es2023"
+    ],
+    "rootDir": "./src",
+    "target": "es2022"
+  }
+}
