@@ -3,6 +3,25 @@
   "version": "1.0.0",
   "description": "",
   "private": true,
+  "exports": {
+    "./package.json": "./package.json",
+    "./types": "./dist/types.d.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./infrastructure": {
+      "types": "./dist/infrastructure.d.mts",
+      "import": "./dist/infrastructure.mjs",
+      "require": "./dist/infrastructure.cjs"
+    },
+    "./application": {
+      "types": "./dist/application.d.mts",
+      "import": "./dist/application.mjs",
+      "require": "./dist/application.cjs"
+    }
+  },
   "scripts": {
     "dev": "tsdown --watch",
     "build": "pnpm run clean && tsdown",

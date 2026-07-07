@@ -6,6 +6,7 @@ export default defineConfig({
     entry: {
         types: 'src/types/index.ts',
         index: 'src/index.ts',
+        application: 'src/application/index.ts',
         infrastructure: 'src/infrastructure/index.ts',
     },
     dts: {

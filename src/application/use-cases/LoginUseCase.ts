@@ -36,7 +36,7 @@ export class LoginUseCase extends UseCase<LoginCommand, LoginResponse> {
     async execute(command: LoginCommand): Promise<Result<LoginResponse>> {
         const emailResult = this.tryCatch(() => Email.create(command.email));
         if (emailResult.isFailure) {
-            return this.fail(new ValidationError('Invalid email format', 'email', { provided: command.email }));
+            return this.fail(emailResult.error);
         }
 
         const passwordResult = this.tryCatch(() => Password.create(command.password));
@@ -46,12 +46,12 @@ export class LoginUseCase extends UseCase<LoginCommand, LoginResponse> {
 
         const email = emailResult.value;
         const user = await this.userRepository.findAuthData(email.value);
+
         if (!user) {
             return this.fail(new NotFoundError('User', undefined, { email: command.email }));
         }
 
-        const password = passwordResult.value;
-        if (!password.verify(user.passwordHash?.value || '')) {
+        if (!user.passwordHash.verify(command.password)) {
             return this.fail(new UnauthorizedError('Invalid credentials'));
         }
 
