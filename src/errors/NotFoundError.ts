@@ -12,5 +12,7 @@ export class NotFoundError extends DomainError {
             { entity, id, ...metadata }
         );
         this.name = 'NotFoundError';
+
+        Object.setPrototypeOf(this, NotFoundError.prototype);
     }
 }

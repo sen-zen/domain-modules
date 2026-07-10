@@ -1,6 +1,3 @@
-import { DomainError } from '../errors/DomainError';
-import { ApplicationError } from '../errors/ApplicationError';
-
 export class Result<T> {
     private constructor(
         private readonly _isSuccess: boolean,
@@ -35,7 +32,19 @@ export class Result<T> {
     }
 
     static fail<T>(error: Error | string): Result<T> {
+        if (typeof error === 'string') {
+            return new Result<T>(false, undefined, new Error(error));
+        }
         return new Result<T>(false, undefined, error);
+    }
+
+    get errorMessage(): string {
+        if (this.isSuccess) {
+            return '';
+        }
+        return this._error instanceof Error
+            ? this._error.message
+            : String(this._error);
     }
 
     onSuccess(fn: (value: T) => void): Result<T> {
@@ -69,24 +78,24 @@ export class Result<T> {
         return {
             success: false,
             error: typeof error === 'string' ? error : error.message,
-            errorType: error instanceof Error ? error.constructor.name : 'Error',
+            errorType: error.constructor.name,
             stack: error instanceof Error ? error.stack : undefined,
         };
     }
 
-    isDomainError(): boolean {
+    isCoreError(): boolean {
         if (this.isSuccess) {
             return false;
         }
         const error = this._error as Error | string;
-        return error instanceof Error && error instanceof DomainError;
+        return error.constructor.name === 'CoreError';
     }
 
-    isApplicationError(): boolean {
+    isBusinessError(): boolean {
         if (this.isSuccess) {
             return false;
         }
         const error = this._error as Error | string;
-        return error instanceof Error && error instanceof ApplicationError;
+        return error.constructor.name === 'BusinessException';
     }
 }

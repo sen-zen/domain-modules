@@ -43,6 +43,18 @@ export class Session {
         );
     }
 
+    static reconstitute(primitives: SessionPrimitives): Session {
+        return new Session(
+            UserId.create(primitives.userId),
+            primitives.accessToken,
+            primitives.refreshToken,
+            primitives.expiresAt,
+            primitives.deviceName || null,
+            primitives.ipAddress || null,
+            primitives.userAgent || null
+        );
+    }
+
     get expiresAt(): Date {
         return this._expiresAt;
     }

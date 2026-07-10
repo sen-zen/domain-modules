@@ -7,5 +7,7 @@ export class ConflictError extends DomainError {
     ) {
         super(message, 'CONFLICT_ERROR', metadata);
         this.name = 'ConflictError';
+
+        Object.setPrototypeOf(this, ConflictError.prototype);
     }
 }

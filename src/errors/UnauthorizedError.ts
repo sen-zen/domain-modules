@@ -7,5 +7,7 @@ export class UnauthorizedError extends DomainError {
     ) {
         super(message, 'UNAUTHORIZED', metadata);
         this.name = 'UnauthorizedError';
+
+        Object.setPrototypeOf(this, UnauthorizedError.prototype);
     }
 }

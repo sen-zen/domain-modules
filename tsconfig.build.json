@@ -11,6 +11,12 @@
         "paths": {
             "@domain/*": [
                 "./src/domain/*"
+            ],
+            "@value-objects/*": [
+                "./src/domain/value-objects/*"
+            ],
+            "@application/*": [
+                "./src/application/*"
             ]
         }
     }

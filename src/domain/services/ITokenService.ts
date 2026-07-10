@@ -7,6 +7,7 @@ export interface ITokenService {
      */
     generateTokens(
         userId: string,
+        family?: string,
         deviceInfo?: {
             userAgent?: string;
             ipAddress?: string;
@@ -78,4 +79,11 @@ export interface ITokenService {
 
 
     getExpiresIn(): { accessTokenExpiresIn: ExpiresIn, refreshTokenExpiresIn: ExpiresIn };
+
+    /**
+     * Получение времени жизни
+     */
+    getAccessTokenExpiresIn(): { seconds: number };
+
+    getRefreshTokenExpiresIn(): { seconds: number };
 }

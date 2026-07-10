@@ -4,7 +4,7 @@ import { LoginCommand } from '../commands/LoginCommand';
 import { Email } from '../../domain/value-objects/Email';
 import { Password } from '../../domain/value-objects/Password';
 import { RefreshToken } from '../../domain/entities/user/RefreshToken';
-import { ValidationError, NotFoundError, UnauthorizedError } from '../../errors';
+import { NotFoundError, UnauthorizedError } from '../../errors';
 
 import type { Result } from '../../utils/result';
 import type { ITokenService } from '../../domain/services/ITokenService';

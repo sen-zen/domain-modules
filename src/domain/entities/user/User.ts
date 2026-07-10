@@ -26,17 +26,17 @@ export class User {
     private constructor(
         public readonly id: UserId,
         private _email: Email,
-        private _username: string | null,
-        private _passwordHash: Password | null,
-        private _avatar: string | null,
-        private _profilePictureUrl: string | null,
-        private _bio: string | null,
-        private _languageCode: string,
-        private _countryCode: string | null,
+        private _username: string | null = null,
+        private _passwordHash: Password | null = null,
+        private _avatar: string | null = null,
+        private _profilePictureUrl: string | null = null,
+        private _bio: string | null = null,
+        private _languageCode: string = "ru",
+        private _countryCode: string | null = null,
         private _subscriptionStatus: boolean,
-        private _verificationToken: string | null,
-        private _verificationTokenExpiresAt: Date | null,
-        private _roleId: string | null,
+        private _verificationToken: string | null = null,
+        private _verificationTokenExpiresAt: Date | null = null,
+        private _roleId: string | null = null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         private _refreshTokens: RefreshToken[] = []
@@ -55,12 +55,12 @@ export class User {
         return new User(
             UserId.generate(),
             email,
-            data.username || null,
+            data.username,
             password,
             null,
             null,
             null,
-            data.languageCode || 'ru',
+            data.languageCode,
             null,
             false,
             null,
@@ -93,16 +93,20 @@ export class User {
         );
     }
 
+    /**
+     * Возвращает passwordHash как Password object для API compatibility
+     * Используется внутри домена и внешних клиентов, возвращающих объект с методом verify()
+     */
+    get passwordHash(): Password | null {
+        return this._passwordHash;
+    }
+
     get email(): Email {
         return this._email;
     }
 
     get username(): string | null {
         return this._username;
-    }
-
-    get passwordHash(): Password | null {
-        return this._passwordHash;
     }
 
     get avatar(): string | null {
@@ -174,16 +178,20 @@ export class User {
         if (data.countryCode !== undefined) this._countryCode = data.countryCode;
     }
 
-    verify(email: string): boolean {
+    isVerifiedWithEmail(email: string): boolean {
         return this._email.equals(Email.create(email)) && this.isVerified;
     }
 
+    /**
+     * Устанавливает verificationToken для email верификации
+     */
     setVerificationToken(token: string, expiresAt: Date): void {
         this._verificationToken = token;
         this._verificationTokenExpiresAt = expiresAt;
     }
 
     verifyEmail(): void {
+        if (this.isVerified) return;
         this._verificationToken = null;
         this._verificationTokenExpiresAt = null;
     }
@@ -204,12 +212,10 @@ export class User {
         this._refreshTokens.push(token);
     }
 
-    // Validation
     canLogin(): boolean {
         return this.isVerified && this._passwordHash !== null;
     }
 
-    // Domain event handling
     private domainEvents: any[] = [];
 
     addDomainEvent(event: any): void {
@@ -229,7 +235,7 @@ export class User {
             id: this.id.value,
             email: this._email.value,
             username: this._username,
-            passwordHash: this._passwordHash?.value || null,
+            passwordHash: this._passwordHash ? this._passwordHash.value : null,
             avatar: this._avatar,
             profilePictureUrl: this._profilePictureUrl,
             bio: this._bio,

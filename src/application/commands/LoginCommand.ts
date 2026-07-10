@@ -1,38 +1,35 @@
-/**
- * Команда для входа пользователя
- */
+
+type LoginCommandData = {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+    userAgent?: string;
+    ipAddress?: string;
+    deviceName?: string;
+}
+
 export class LoginCommand {
-    constructor(
-        public readonly email: string,
-        public readonly password: string,
-        public readonly userAgent?: string,
-        public readonly ipAddress?: string,
-        public readonly deviceName?: string
+    private constructor(
+        public readonly email: LoginCommandData['email'],
+        public readonly password: LoginCommandData['password'],
+        public readonly rememberMe: LoginCommandData['rememberMe'],
+        public readonly userAgent: LoginCommandData['userAgent'],
+        public readonly ipAddress: LoginCommandData['ipAddress'],
+        public readonly deviceName: LoginCommandData['deviceName']
     ) { }
 
-    static fromObject(data: {
-        email: string;
-        password: string;
-        userAgent?: string;
-        ipAddress?: string;
-        deviceName?: string;
-    }): LoginCommand {
+    static create(data: LoginCommandData): LoginCommand {
         return new LoginCommand(
             data.email,
             data.password,
+            data.rememberMe,
             data.userAgent,
             data.ipAddress,
             data.deviceName
         );
     }
 
-    toObject(): {
-        email: string;
-        password: string;
-        userAgent?: string;
-        ipAddress?: string;
-        deviceName?: string;
-    } {
+    toObject(): LoginCommandData {
         return {
             email: this.email,
             password: this.password,

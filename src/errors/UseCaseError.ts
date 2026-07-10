@@ -8,5 +8,7 @@ export class UseCaseError extends ApplicationError {
     ) {
         super(message, code || 'USE_CASE_ERROR', metadata);
         this.name = 'UseCaseError';
+
+        Object.setPrototypeOf(this, UseCaseError.prototype);
     }
 }

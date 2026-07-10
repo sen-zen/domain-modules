@@ -10,8 +10,8 @@ import { ExpiresIn } from '../../domain/value-objects/ExpiresIn';
 export class JWTTokenService implements ITokenService {
     constructor(private readonly config: JWTConfig) { }
 
-    async generateTokens(userId: string): Promise<TokenPair> {
-        const familyId = await this.generateFamilyId();
+    async generateTokens(userId: string, family?: string): Promise<TokenPair> {
+        const familyId = family || await this.generateFamilyId();
 
         const accessToken = await this.generateAccessToken(userId);
         const refreshToken = await this.generateRefreshToken(userId, familyId);
@@ -178,6 +178,14 @@ export class JWTTokenService implements ITokenService {
             this.config.secret,
             options
         );
+    }
+
+    getAccessTokenExpiresIn(): { seconds: number; } {
+        return { seconds: this.config.accessTokenExpiresIn.seconds }
+    }
+
+    getRefreshTokenExpiresIn(): { seconds: number; } {
+        return { seconds: this.config.refreshTokenExpiresIn.seconds }
     }
 
     getExpiresIn(): { accessTokenExpiresIn: ExpiresIn; refreshTokenExpiresIn: ExpiresIn; } {

@@ -8,5 +8,7 @@ export class ValidationError extends DomainError {
     ) {
         super(message, 'VALIDATION_ERROR', metadata);
         this.name = 'ValidationError';
+
+        Object.setPrototypeOf(this, ValidationError.prototype);
     }
 }

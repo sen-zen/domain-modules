@@ -11,8 +11,13 @@ export class ExpiresAt {
         return new ExpiresAt(value);
     }
 
-    static fromNow(expiresIn: ExpiresIn): ExpiresAt {
-        return new ExpiresAt(new Date(Date.now() + expiresIn.seconds * 1000));
+    static fromNow(expiresIn: ExpiresIn | number): ExpiresAt {
+        const now = Date.now();
+        if (expiresIn instanceof ExpiresIn) {
+            return new ExpiresAt(new Date(now + expiresIn.seconds * 1000));
+        } else {
+            return new ExpiresAt(new Date(now + expiresIn * 1000));
+        }
     }
 
     static fromDate(date: Date): ExpiresAt {
