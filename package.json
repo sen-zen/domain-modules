@@ -35,7 +35,10 @@
   "dependencies": {
     "@tastehub/prisma": "workspace:*",
     "bcryptjs": "^3.0.3",
+    "esbuild": "^0.28.1",
+    "glob": "^13.0.6",
     "jsonwebtoken": "9.0.3",
+    "reflect-metadata": "^0.2.2",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {

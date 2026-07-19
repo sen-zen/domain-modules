@@ -1,17 +1,17 @@
 {
-  "extends": "../../tsconfig.json",
-  "include": [
-    "src"
-  ],
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "types": [
-      "node",
-      "vitest/globals"
-    ],
     "lib": [
       "es2023"
     ],
     "rootDir": "./src",
     "target": "es2022"
-  }
+  },
+  "include": [
+    "src"
+  ],
+  "types": [
+    "node",
+    "vitest/globals"
+  ],
 }

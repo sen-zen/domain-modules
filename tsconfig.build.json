@@ -5,6 +5,8 @@
     ],
     "compilerOptions": {
         "declarationDir": "dist",
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
         "types": [
             "node"
         ],

@@ -1,22 +1,22 @@
-export * from './domain/entities/tag/Tag';
-export * from './domain/entities/like/Like';
-export * from './domain/entities/user/User';
-export * from './domain/entities/user/Session';
-export * from './domain/entities/user/RefreshToken';
+import 'reflect-metadata';
 
-export * from './domain/repositories/IUserRepository';
-export * from './domain/repositories/IRefreshTokenRepository';
+import { ModuleScanner } from './di/ModuleScanner';
+import { moduleContainer, serviceContainer } from './di';
 
-export * from './domain/services/ITokenService';
+export async function initializeCore() {
+    const scanner = new ModuleScanner();
+    await scanner.scan('./modules');
 
-export * from './domain/value-objects/Email';
-export * from './domain/value-objects/UserId';
-export * from './domain/value-objects/Password';
-export * from './domain/value-objects/RecipeId';
-export * from './domain/value-objects/ExpiresAt';
-export * from './domain/value-objects/ExpiresIn';
+    console.log('[Core] Initialized with', moduleContainer.getAllModules().size, 'modules');
 
-export * from './utils/result';
+    return {
+        moduleContainer,
+        serviceContainer
+    };
+}
 
-export * from './errors';
-export * from './types';
+export * from './modules/core';
+export * from './modules/auth';
+export * from './modules/user';
+export * from './di';
+
