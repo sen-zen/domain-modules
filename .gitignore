@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+
+.pnpm-store/
+.vscode/
+.idea/
+.DS_Store
+
+npm-debug.log
+pnpm-debug.log
+yarn-error.log
+
+.env
+.env.local
+.env.*.local
