@@ -1,5 +1,5 @@
 import { ExpiresIn } from "./ExpiresIn";
-import { ValidationError } from "../../../../errors";
+import { ValidationError } from "@/errors";
 
 export class ExpiresAt {
     private constructor(private readonly _value: Date) { }

@@ -1,4 +1,5 @@
-import { Email, Password, UserId } from "../value-objects";
+import { Email, Password } from "@core/domain/value-objects";
+import { UserId } from "@user/domain/value-objects";
 
 export interface UserAuthData {
     id: UserId;

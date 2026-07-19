@@ -1,4 +1,4 @@
-import { Result } from '../../../utils/result';
+import { Result } from '@/utils/result';
 
 export abstract class UseCase<TInput, TOutput> {
     /**

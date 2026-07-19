@@ -1,5 +1,5 @@
-import { RefreshToken } from '../entities/RefreshToken';
-import { UserId } from '../../../core/domain/value-objects/UserId';
+import { RefreshToken } from '@auth/domain/entities/RefreshToken';
+import { UserId } from '@user/domain/value-objects';
 
 export interface IRefreshTokenRepository {
     /**

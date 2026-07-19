@@ -1,5 +1,4 @@
 import type { PrismaClient } from '@tastehub/prisma';
-import { moduleContainer } from '../../../../di/ModuleContainer';
 
 export abstract class PrismaRepository {
     protected readonly prisma: PrismaClient;

@@ -1,9 +1,9 @@
-import { UseCase } from '../../UseCase';
-import { Result } from '../../../utils/result';
-import { NotFoundError } from '../../../errors';
-import { UserId } from '../../../domain/value-objects/UserId';
-import type { IUserRepository } from '../../../domain/repositories/IUserRepository';
-import type { ITokenService } from '../../../domain/services/ITokenService';
+import { Result } from '@/utils/result';
+import { NotFoundError } from '@/errors';
+import { UseCase } from '@core/application';
+import { UserId } from '@user/domain/value-objects/UserId';
+import type { ITokenService } from '@auth/domain/services/ITokenService';
+import type { UserDomainRepository } from '@user/domain/repositories/IUserRepository';
 
 export type GetCurrentUserResponse = {
     user: {
@@ -18,7 +18,7 @@ export type GetCurrentUserResponse = {
 export class GetCurrentUserUseCase extends UseCase<string | undefined, GetCurrentUserResponse> {
     constructor(
         private readonly tokenService: ITokenService,
-        private readonly userRepository: IUserRepository
+        private readonly userRepository: UserDomainRepository
     ) {
         super();
     }

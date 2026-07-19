@@ -1,5 +1,5 @@
-import { IRefreshTokenRepository } from '../../../domain/repositories/IRefreshTokenRepository';
-import { UserId } from '../../../domain/value-objects/UserId';
+import { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
+import { UserId } from '../../../user/domain/value-objects/UserId';
 
 export class LogoutUseCase {
     constructor(

@@ -1,5 +1,4 @@
-import { ExpiresIn } from "../../domain/value-objects/ExpiresIn";
-
+import { ExpiresIn } from "../../../core/domain/value-objects/ExpiresIn";
 
 export interface JWTConfig {
     secret: string;

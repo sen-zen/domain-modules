@@ -1,4 +1,4 @@
-import { UserId } from '../../../user/domain/value-objects/UserId';
+import { UserId } from '@user/domain/value-objects/UserId';
 
 export interface SessionPrimitives {
     userId: string;

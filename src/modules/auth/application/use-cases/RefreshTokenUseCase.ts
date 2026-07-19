@@ -1,10 +1,10 @@
-import { ITokenService } from '../../domain/services/ITokenService';
-import { RefreshToken } from '../../domain/entities/RefreshToken';
-import { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
-import { RefreshTokenCommand } from '../commands/RefreshTokenCommand';
-import { UnauthorizedError, NotFoundError } from '../../../../errors';
-import { Result } from '../../../../utils/result';
-import { UseCase } from '../../../core/application';
+import { ITokenService } from '@auth/domain/services/ITokenService';
+import { RefreshToken } from '@auth/domain/entities/RefreshToken';
+import { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
+import { RefreshTokenCommand } from '@auth/application/commands/RefreshTokenCommand';
+import { UnauthorizedError, NotFoundError } from '@/errors';
+import { Result } from '@/utils/result';
+import { UseCase } from '@core/application';
 
 export type RefreshTokenResponse = {
     accessToken: string;

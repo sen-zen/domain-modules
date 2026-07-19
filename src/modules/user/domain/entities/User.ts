@@ -1,8 +1,8 @@
-import { RefreshToken } from '../../../auth/domain/entities/RefreshToken';
+import { RefreshToken } from '@auth/domain/entities/RefreshToken';
 
-import { UserId } from '../value-objects/UserId';
-import { Email } from '../../../core/domain/value-objects/Email';
-import { Password } from '../../../core/domain/value-objects/Password';
+import { UserId } from '@user/domain/value-objects/UserId';
+import { Email } from '@core/domain/value-objects/Email';
+import { Password } from '@core/domain/value-objects/Password';
 
 export interface UserPrimitives {
     id: string;

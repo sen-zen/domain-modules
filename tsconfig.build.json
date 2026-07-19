@@ -11,15 +11,18 @@
             "node"
         ],
         "paths": {
-            "@domain/*": [
-                "./src/domain/*"
+            "@/*": [
+                "./src/*"
             ],
-            "@value-objects/*": [
-                "./src/domain/value-objects/*"
+            "@core/*": [
+                "./src/modules/core/*"
             ],
-            "@application/*": [
-                "./src/application/*"
-            ]
+            "@user/*": [
+                "./src/modules/user/*"
+            ],
+            "@auth/*": [
+                "./src/modules/auth/*"
+            ],
         }
     }
 }

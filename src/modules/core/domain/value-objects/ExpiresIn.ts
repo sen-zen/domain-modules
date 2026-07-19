@@ -1,5 +1,5 @@
 import type { SignOptions } from 'jsonwebtoken';
-import { ValidationError } from '../../../../errors';
+import { ValidationError } from '@/errors';
 
 type ExpiresInInput = NonNullable<SignOptions['expiresIn']>;
 

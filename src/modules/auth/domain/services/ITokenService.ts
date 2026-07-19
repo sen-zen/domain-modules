@@ -1,5 +1,5 @@
-import { ExpiresIn } from '../value-objects/ExpiresIn';
-import { TokenPair, AccessTokenPayload, RefreshTokenPayload } from '../../types/token';
+import { ExpiresIn } from '@core/domain/value-objects/ExpiresIn';
+import { TokenPair, AccessTokenPayload, RefreshTokenPayload } from '../../types';
 
 export interface ITokenService {
     /**

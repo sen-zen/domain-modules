@@ -1,17 +1,17 @@
 import 'reflect-metadata';
 
-import { ModuleScanner } from './di/ModuleScanner';
-import { moduleContainer, serviceContainer } from './di';
+import { ModuleScanner, ModuleContainer } from './di';
 
 export async function initializeCore() {
-    const scanner = new ModuleScanner();
+    const moduleContainer = new ModuleContainer();
+    const scanner = new ModuleScanner(moduleContainer);
+
     await scanner.scan('./modules');
 
     console.log('[Core] Initialized with', moduleContainer.getAllModules().size, 'modules');
 
     return {
-        moduleContainer,
-        serviceContainer
+        moduleContainer
     };
 }
 

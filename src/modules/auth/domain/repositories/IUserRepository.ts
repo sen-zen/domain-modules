@@ -1,6 +1,6 @@
-import { User } from '../entities/user/User';
-import { UserId } from '../value-objects/UserId';
-import { Email } from '../value-objects/Email';
+import { User } from '../../../user/domain/entities';
+import { UserId } from '../../../user/domain/value-objects/UserId';
+import { Email } from '../../../core/domain/value-objects/Email';
 
 import type {
     UserAuthData

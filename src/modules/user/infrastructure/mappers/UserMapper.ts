@@ -1,5 +1,5 @@
 import { User as PrismaUser } from '@tastehub/prisma';
-import { User } from '../../domain/entities/User';
+import { User } from '@user/domain/entities/User';
 
 /**
  * Маппер для преобразования между доменной моделью User и Prisma моделью

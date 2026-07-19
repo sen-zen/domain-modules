@@ -1,6 +1,6 @@
-import { UserId } from '../../../user/domain/value-objects/UserId';
-import { ExpiresIn } from '../../../core/domain/value-objects/ExpiresIn';
-import { ExpiresAt } from '../../../core/domain/value-objects/ExpiresAt';
+import { UserId } from '@user/domain/value-objects/UserId';
+import { ExpiresIn } from '@core/domain/value-objects/ExpiresIn';
+import { ExpiresAt } from '@core/domain/value-objects/ExpiresAt';
 
 export interface RefreshTokenPrimitives {
     id: string;
