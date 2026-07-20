@@ -1,5 +1,3 @@
-import 'reflect-metadata';
-
 import { ModuleScanner, ModuleContainer } from './di';
 
 export async function initializeCore() {

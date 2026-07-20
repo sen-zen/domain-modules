@@ -8,7 +8,7 @@ export interface ComponentConfig {
     dependencies?: string[];
 }
 
-export function Component(config: ComponentConfig) {
+export function Component(config: ComponentConfig = {}) {
     return function (target: any) {
         Object.defineProperty(target, COMPONENT_CONFIG_KEY, {
             value: {

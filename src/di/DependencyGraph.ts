@@ -2,6 +2,7 @@ export interface GraphNode {
     name: string;
     dependencies: string[];
     nodeClass: any;
+    nodeDir: string;
 }
 
 /**
@@ -10,47 +11,39 @@ export interface GraphNode {
 export class DependencyGraph {
     private nodes: Map<string, GraphNode> = new Map();
 
-    addNode = (nodeClass: any, customName?: string, dependencies: string[] = []) => {
-        if (!nodeClass) {
+    addNode = (node: GraphNode) => {
+        if (typeof node !== "object" || node === null || !Object.hasOwn(node, 'nodeClass')) {
             console.warn('[DependencyGraph] Cannot add null/undefined node');
             return this;
         }
 
-        const name = customName ?? nodeClass.name;
+        const name = node.name ?? node.nodeClass.name;
         if (!name) {
             console.warn('[DependencyGraph] NodeClass has no name');
             return this;
         }
 
-        this.nodes.set(name, {
-            name,
-            dependencies,
-            nodeClass,
-        });
+        this.nodes.set(name, node);
 
         return this;
     }
 
     addNodes(nodes: GraphNode[]) {
-        nodes.forEach((node) => this.addNode(
-            node.nodeClass,
-            node.name ?? node.nodeClass.name,
-            node.dependencies ?? []
-        ));
+        nodes.forEach((node) => this.addNode(node));
         return this;
     }
 
     /**
      * Топологическая сортировка (DFS)
      */
-    sort(): any[] {
+    sort(): GraphNode[] {
         if (this.nodes.size === 0) {
             return [];
         }
 
         const visited = new Set<string>();
         const visiting = new Set<string>();
-        const result: any[] = [];
+        const result: GraphNode[] = [];
         const allNames = Array.from(this.nodes.keys());
 
         const visit = (name: string): void => {
@@ -81,7 +74,7 @@ export class DependencyGraph {
             visited.add(name);
 
             if (node) {
-                result.push(node.nodeClass);
+                result.push(node);
             }
         }
 

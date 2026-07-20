@@ -1,34 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ModuleContainer } from '../../di/ModuleContainer';
 import { ModuleScanner } from '../../di/ModuleScanner';
 import { Module } from '../../decorators/Module';
-
-export async function createTestModuleFile(
-    dir: string,
-    name: string,
-    config: any = {}
-): Promise<string> {
-    const filePath = `${dir}/${name}.module.js`;
-    const content = `
-        export class ${name} {
-            static __moduleConfig = {
-                name: '${name}',
-                useCases: ${JSON.stringify(config.useCases || [])},
-                repositories: ${JSON.stringify(config.repositories || [])},
-                services: ${JSON.stringify(config.services || [])},
-                dependencies: ${JSON.stringify(config.dependencies || [])},
-                enabled: ${config.enabled !== false},
-                version: '${config.version || '1.0.0'}',
-                config: ${JSON.stringify(config.config || null)},
-            };
-        }
-    `;
-
-    await writeFile(filePath, content);
-    return filePath;
-}
+import { createTestComponentFile, createTestModuleFile } from './utils/test-types';
 
 let tmpDirs: string[] = [];
 
@@ -48,7 +23,7 @@ describe('ModuleScanner', () => {
         };
 
         container = new ModuleContainer();
-        scanner = new ModuleScanner(container);
+        scanner = new ModuleScanner(container, { log: true });
 
         vi.spyOn(console, 'info').mockImplementation(() => { });
         vi.spyOn(console, 'warn').mockImplementation(() => { });
@@ -85,9 +60,7 @@ describe('ModuleScanner', () => {
 
         it('не регистрирует дублирующиеся модули', () => {
             @Module({
-                name: 'duplicate-module',
-                useCases: [],
-                repositories: [],
+                name: 'duplicate-module'
             })
             class DuplicateModule { }
 
@@ -101,8 +74,6 @@ describe('ModuleScanner', () => {
         it('обрабатывает ошибки при регистрации', () => {
             @Module({
                 name: 'test-module',
-                useCases: [],
-                repositories: [],
                 dependencies: ['non-existent-module'],
             })
             class TestModule { }
@@ -115,9 +86,7 @@ describe('ModuleScanner', () => {
     describe('getModules()', () => {
         it('возвращает Map зарегистрированных модулей', () => {
             @Module({
-                name: 'M1',
-                useCases: [],
-                repositories: [],
+                name: 'M1'
             })
             class M1 { }
 
@@ -132,9 +101,7 @@ describe('ModuleScanner', () => {
     describe('clear()', () => {
         it('очищает модули и вызывает container.clear()', () => {
             @Module({
-                name: 'M1',
-                useCases: [],
-                repositories: [],
+                name: 'M1'
             })
             class M1 { }
             scanner.registerModule(M1);
@@ -183,6 +150,146 @@ describe('ModuleScanner', () => {
             expect(scanner.getModules().has('CoreModule')).toBe(true);
             expect(scanner.getModules().has('AuthModule')).toBe(true);
             expect(scanner.getModules().has('UserModule')).toBe(true);
+        });
+
+    });
+
+    describe('scanComponents()', () => {
+        it('должен сканировать директорию и регистрировать компоненты', async () => {
+            const dir = await makeTempDir();
+            await createTestComponentFile(dir, 'UserRepository', {
+                scope: 'singleton',
+                dependencies: ['PrismaClient']
+            });
+            await createTestComponentFile(dir, 'TokenService', {
+                scope: 'singleton',
+                dependencies: []
+            });
+            await createTestComponentFile(dir, 'LoginUseCase', {
+                scope: 'request',
+                dependencies: ['UserRepository', 'TokenService']
+            });
+
+            await scanner.scanComponents(dir);
+            expect(scanner['container'].has('UserRepository')).toBe(true);
+            expect(scanner['container'].has('TokenService')).toBe(true);
+            expect(scanner['container'].has('LoginUseCase')).toBe(true);
+        });
+
+        it('должен игнорировать файлы, которые не экспортируют компоненты', async () => {
+            const dir = await makeTempDir();
+            const filePath = join(dir, 'not-component.js');
+
+            await writeFile(filePath, 'export class NotComponent {}');
+            await scanner.scanComponents(dir);
+
+            expect(scanner['container'].has('NotComponent')).toBe(false);
+        });
+
+        it('должен обрабатывать ошибки загрузки файлов и продолжать сканирование', async () => {
+            const dir = await makeTempDir();
+            await createTestComponentFile(dir, 'ValidComponent');
+            await writeFile(join(dir, 'invalid.js'), 'export class Invalid { ... }');
+            await scanner.scanComponents(dir);
+            expect(scanner['container'].has('ValidComponent')).toBe(true);
+            expect(scanner['container'].has('Invalid')).toBe(false);
+            expect(console.error).toHaveBeenCalled();
+        });
+
+        it('должен рекурсивно обходить поддиректории', async () => {
+            const dir = await makeTempDir();
+            const subDir = join(dir, 'sub');
+            await mkdir(subDir);
+            await createTestComponentFile(subDir, 'SubComponent');
+            await scanner.scanComponents(dir);
+
+            expect(scanner['container'].has('SubComponent')).toBe(true);
+        });
+    });
+
+    describe('scan() поиск компонентов внутри модулей', () => {
+        it('должен найти компоненты в директории модуля', async () => {
+            const dir = await makeTempDir();
+            const moduleDir = join(dir, 'auth');
+
+            await mkdir(moduleDir);
+            await createTestModuleFile(moduleDir, 'AuthModule');
+            await createTestComponentFile(moduleDir, 'AuthRepo', {
+                scope: 'singleton',
+                dependencies: []
+            });
+            await createTestComponentFile(moduleDir, 'LoginUseCase', {
+                scope: 'request',
+                dependencies: ['AuthRepo']
+            });
+
+            await scanner.scan(moduleDir);
+
+            expect(scanner.hasModule('AuthModule')).toBe(true);
+            const containerInstance = scanner.getContainer();
+            expect(containerInstance.has('AuthRepo')).toBe(true);
+            expect(containerInstance.has('LoginUseCase')).toBe(true);
+        });
+
+        it('должен найти компоненты в поддиректориях модуля', async () => {
+            const dir = await makeTempDir();
+            const moduleDir = join(dir, 'user');
+            const reposDir = join(moduleDir, 'repositories');
+            const usecasesDir = join(moduleDir, 'usecases');
+
+            await mkdir(moduleDir, { recursive: true });
+            await createTestModuleFile(moduleDir, 'UserModule');
+
+
+            await mkdir(reposDir, { recursive: true });
+            await createTestComponentFile(reposDir, 'UserRepo', {
+                scope: 'singleton',
+                dependencies: []
+            });
+
+            await mkdir(usecasesDir, { recursive: true });
+            await createTestComponentFile(usecasesDir, 'GetUserUseCase', {
+                scope: 'request',
+                dependencies: ['UserRepo']
+            });
+
+            await scanner.scan(moduleDir);
+
+            expect(scanner.getContainer().has('UserRepo')).toBe(true);
+            expect(scanner.getContainer().has('GetUserUseCase')).toBe(true);
+        });
+
+        it('НЕ должен находить компоненты вне директорий модулей', async () => {
+            const dir = await makeTempDir();
+            const moduleDir = join(dir, 'auth');
+
+            await mkdir(moduleDir);
+            await createTestModuleFile(moduleDir, 'AuthModule');
+            await createTestComponentFile(dir, 'GlobalRepo', {
+                scope: 'singleton',
+                dependencies: []
+            });
+
+            await scanner.scan(moduleDir);
+            expect(scanner.hasModule('AuthModule')).toBe(true);
+            expect(scanner.getContainer().has('GlobalRepo')).toBe(false);
+        });
+
+        it('должен сканировать компоненты только один раз для директории с несколькими модулями', async () => {
+            const dir = await makeTempDir();
+            const scanComponentsSpy = vi.spyOn(scanner, 'scanComponents');
+
+            await createTestModuleFile(dir, 'ModuleA');
+            await createTestModuleFile(dir, 'ModuleB');
+            await createTestComponentFile(dir, 'SharedRepo', {
+                scope: 'singleton',
+                dependencies: []
+            });
+
+            await scanner.scan(dir);
+
+            expect(scanComponentsSpy).toHaveBeenCalledTimes(1);
+            expect(scanner.getContainer().has('SharedRepo')).toBe(true);
         });
     });
 }); 

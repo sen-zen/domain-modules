@@ -11,13 +11,7 @@ export interface ModuleConfig extends ComponentConfig {
     version?: string;
 
     /** UseCase'ы модуля */
-    useCases?: (Type<any> | { class: Type<any>; scope?: Scope })[];
-
-    /** Сервисы модуля */
-    services?: (Type<any> | { class: Type<any>; scope?: Scope })[];
-
-    /** Репозитории модуля */
-    repositories?: (Type<any> | { class: Type<any>; scope?: Scope })[];
+    components?: (Type<any> | { class: Type<any>; scope?: Scope })[];
 
     /** Включен ли модуль */
     enabled?: boolean;
@@ -35,9 +29,7 @@ export function Module(config: ModuleConfig) {
                 name: config.name || target.name,
                 description: config.description,
                 version: config.version || '1.0.0',
-                useCases: config.useCases || [],
-                repositories: config.repositories || [],
-                services: config.services || [],
+                components: config.components || [],
                 dependencies: config.dependencies || [],
                 enabled: config.enabled !== false,
                 config: config.config || null,
@@ -78,16 +70,8 @@ export const ModuleMetadata = {
         return this._getValue(target, 'dependencies') ?? [];
     },
 
-    getUseCases(target: any) {
-        return this._getValue(target, 'useCases') ?? [];
-    },
-
-    getRepositories(target: any) {
-        return this._getValue(target, 'repositories') ?? [];
-    },
-
-    getServices(target: any) {
-        return this._getValue(target, 'services') ?? [];
+    getComponents(target: any) {
+        return this._getValue(target, 'components') ?? [];
     },
 
     isEnabled(target: any) {

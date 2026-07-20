@@ -5,13 +5,16 @@
       "es2023"
     ],
     "rootDir": "./src",
-    "target": "es2022"
+    "target": "es2022",
+    "types": [
+      "node",
+      "vitest/globals",
+    ],
   },
   "include": [
     "src"
   ],
-  "types": [
-    "node",
-    "vitest/globals"
-  ],
+  "exclude": [
+    "node_modules",
+  ]
 }

@@ -1,4 +1,5 @@
 import { ModuleMetadata } from '../decorators/Module';
+import { ComponentMetadata } from '../decorators/Component';
 import { ModuleContainer } from './ModuleContainer';
 import { DependencyGraph } from './DependencyGraph';
 import type { Type } from '../types';
@@ -22,8 +23,9 @@ export class ModuleScanner {
 
     private container: ModuleContainer;
     private modules: Map<string, any> = new Map();
-    private options: ScannerOptions;
+    private options: Omit<ScannerOptions, 'pattern'> & { pattern: RegExp };
     private failed: string[] = [];
+    private scannedDirs: Set<string> = new Set();
 
     constructor(container: ModuleContainer, options: ScannerOptions = {}) {
         this.container = container;
@@ -56,8 +58,9 @@ export class ModuleScanner {
      * Возвращает this для цепочки вызовов (chainable API)
      */
     async scan(directory: string): Promise<ModuleScanner> {
-        this.modules.clear();
         this.failed = [];
+        this.modules.clear();
+        this.scannedDirs.clear();
 
         if (!this.container) {
             if (this.options.log) {
@@ -67,13 +70,7 @@ export class ModuleScanner {
         }
 
         try {
-            const fs = await import('node:fs/promises');
-            const path = await import('node:path');
-            const entries = await fs.readdir(directory, { withFileTypes: true });
-
-            const moduleFiles = entries
-                .filter((entry) => entry.isFile() && this.options.pattern?.test(entry.name))
-                .map(entry => path.join(directory, entry.name));
+            const moduleFiles = await this.findFiles(directory, this.options.pattern, 0);
 
             if (this.options.log) {
                 console.info(`Found ${moduleFiles.length} module files`);
@@ -84,18 +81,43 @@ export class ModuleScanner {
                 return this;
             }
 
-            const modules = await this.loadModules(moduleFiles);
+            const modules = await this.load(moduleFiles, ModuleMetadata.isModule);
 
             if (modules.length === 0) {
                 console.warn('No valid modules found');
                 return this;
             }
 
-            const sortedModules = this.sortModules(modules);
+            const graph = new DependencyGraph();
+            const moduleDirs = new Set<string>();
 
-            for (const moduleClass of sortedModules) {
-                this.registerModule(moduleClass);
+            modules.forEach(({ module, moduleDir }) => {
+                graph.addNode({
+                    nodeClass: module,
+                    nodeDir: moduleDir,
+                    name: ModuleMetadata.getName(module),
+                    dependencies: ModuleMetadata.getDependencies(module)
+                });
+
+                moduleDirs.add(moduleDir);
+            });
+
+            const sortedModules = graph.sort();
+
+            for (const node of sortedModules) {
+                this.registerModule(node.nodeClass);
             }
+
+            for (const moduleDir of moduleDirs) {
+                if (!this.scannedDirs.has(moduleDir)) {
+                    if (this.options.log) {
+                        console.info(`[ModuleScanner] Scanning components in: ${moduleDir}`);
+                    }
+
+                    await this.scanComponents(moduleDir);
+                    this.scannedDirs.add(moduleDir);
+                }
+            };
 
             if (this.options.log) {
                 console.warn(`[ModuleScanner] Found ${this.modules.size} modules, ${this.failed.length} failed`);
@@ -108,21 +130,111 @@ export class ModuleScanner {
         }
     }
 
-    private async loadModules(files: string[]): Promise<any[]> {
-        const modules: any[] = [];
+    /**
+     * Сканирует директорию на предмет файлов, содержащих компоненты (@Component)
+     * и регистрирует их в контейнере.
+     */
+    async scanComponents(directory: string): Promise<ModuleScanner> {
+        const graph = new DependencyGraph();
+        const componentFiles = await this.findFiles(directory, /\.(t|j)sx?$/, 5);
+        const components = await this.load(componentFiles, ComponentMetadata.isComponent);
+
+        if (components.length === 0) {
+            if (this.options.log) {
+                console.info(`[ModuleScanner] No components found in ${directory}`);
+            }
+            return this;
+        }
+
+        components.forEach(({ module, moduleDir }) => {
+            graph.addNode({
+                nodeClass: module,
+                nodeDir: moduleDir,
+                name: ComponentMetadata.getName(module),
+                dependencies: ComponentMetadata.getDependencies(module)
+            });
+        });
+
+        const sortedComponents = graph.sort();
+
+        for (const node of sortedComponents) {
+            const component = node.nodeClass;
+            const name = ComponentMetadata.getName(component);
+
+            if (!this.container.has(name)) {
+                this.container.registerComponent(component);
+
+                if (this.options.log) {
+                    console.info(`[ModuleScanner] Registered component: ${name}`);
+                }
+            } else if (this.options.log) {
+                console.warn(`[ModuleScanner] Component "${name}" already registered, skipping`);
+            }
+        }
+
+        return this;
+    }
+
+    /**
+     * Находит все JS файлы (рекурсивно)
+     */
+    private async findFiles(
+        dir: string,
+        pattern: RegExp,
+        maxDepth: number = -1
+    ): Promise<string[]> {
+        const fs = await import('node:fs/promises');
+        const path = await import('node:path');
+        const files: string[] = [];
+        const directories: { dir: string; depth: number }[] = [{ dir, depth: 0 }];
+
+        while (directories.length) {
+            const current = directories.shift()!;
+
+            if (maxDepth >= 0 && current.depth > maxDepth) {
+                continue;
+            }
+
+            try {
+                const entries = await fs.readdir(current.dir, { withFileTypes: true });
+
+                for (const entry of entries) {
+                    const fullPath = path.join(current.dir, entry.name);
+
+                    if (entry.isDirectory() && (maxDepth === -1 || current.depth < maxDepth)) {
+                        directories.push({
+                            dir: fullPath,
+                            depth: current.depth + 1
+                        });
+                    } else if (entry.isFile() && pattern.test(entry.name)) {
+                        files.push(fullPath);
+                    }
+                }
+            } catch (error) {
+                console.warn(`[ModuleScanner][depth: ${current.depth}] Failed to read directory "${current.dir}":`, error);
+            }
+        }
+
+        return files;
+    }
+
+    private async load(files: string[], isMetadata: (module: any) => boolean) {
+        const path = await import('node:path');
+        const modules: { module: any, moduleDir: string }[] = [];
 
         for (const file of files) {
             try {
                 const moduleExports = await import(file);
+                const moduleDir = path.dirname(file);
 
-                for (const value of Object.values(moduleExports)) {
-                    if (typeof value === 'function' && ModuleMetadata.isModule(value)) {
-                        modules.push(value);
+                for (const module of Object.values(moduleExports)) {
+                    if (typeof module === 'function' && isMetadata(module)) {
+                        modules.push({ module, moduleDir });
                     }
                 }
             } catch (error) {
                 this.failed.push(file);
-                console.warn(`Failed to load ${file}: ${error}`);
+                console.error(`Failed to load ${file}: ${error}`);
             }
         }
 
@@ -130,39 +242,9 @@ export class ModuleScanner {
     }
 
     /**
-     * Сортирует модули по зависимостям (топологическая сортировка)
-     */
-    private sortModules(modules: any[]): any[] {
-        if (!modules || modules.length === 0) {
-            console.warn('No modules to sort');
-            return [];
-        }
-
-        const graph = new DependencyGraph();
-
-        for (const module of modules) {
-            if (ModuleMetadata.isModule(module)) {
-                const name = ModuleMetadata.getName(module);
-                const dependencies = ModuleMetadata.getDependencies(module);
-
-                graph.addNode(module, name, dependencies);
-            }
-        }
-
-        const sorted = graph.sort();
-
-        if (this.options.log) {
-            const order = sorted.map(m => ModuleMetadata.getName(m));
-            console.warn(`[ModuleScanner] Registration order: ${order.join(' → ')}`);
-        }
-
-        return sorted;
-    }
-
-    /**
      * Регистрирует модуль
      */
-    registerModule(moduleClass: any): void {
+    registerModule(moduleClass: any) {
         if (!this.container) {
             return;
         }
@@ -216,6 +298,10 @@ export class ModuleScanner {
         return new Map(this.modules);
     }
 
+    getContainer() {
+        return this.container;
+    }
+
     getResult(): ScanResult {
         return {
             modulesCount: this.modules.size,
@@ -235,8 +321,9 @@ export class ModuleScanner {
      * Очищает все модули (для тестов)
      */
     clear(): void {
-        this.modules.clear();
         this.failed = [];
+        this.modules.clear();
+        this.scannedDirs.clear();
 
         if (this.container) {
             this.container.clear();

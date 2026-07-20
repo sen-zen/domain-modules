@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import path from 'path';
 
 export default defineConfig({
   test: {
@@ -17,11 +18,14 @@ export default defineConfig({
       forks: {
         singleFork: false
       }
-    }
+    },
   },
   resolve: {
     alias: {
-      '@': '/src',
+      '@': path.resolve(__dirname, "./src"),
+      "@core": path.resolve(__dirname, "./src/modules/core"),
+      "@user": path.resolve(__dirname, "./src/modules/user"),
+      "@auth": path.resolve(__dirname, "./src/modules/auth"),
     },
   },
 });

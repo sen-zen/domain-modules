@@ -1,16 +1,12 @@
 import { Container, type ContainerOptions } from './Container';
-import { ModuleMetadata } from '../decorators/Module';
-import { UseCaseMetadata } from '../decorators/UseCase';
-import { Scope } from "../types";
-import { ComponentMetadata } from '../decorators/Component';
-
+import { ComponentMetadata } from '@/decorators/Component';
+import { ModuleMetadata } from '@/decorators/Module';
+import { Scope } from "@/types";
 
 export interface ModuleInfo {
     name: string;
     class: any;
-    useCases: any[];
-    repositories: any[];
-    services: any[];
+    components: any[];
     dependencies: string[];
     enabled: boolean;
     version: string;
@@ -62,18 +58,15 @@ export class ModuleContainer {
     /**
      * Регистрирует модуль с декораторами или тестовыми метаданными
      */
-    registerModule(moduleClass: any): void {
+    registerModule = (moduleClass: any) => {
         const name = ModuleMetadata.getName(moduleClass);
-        const useCases = ModuleMetadata.getUseCases(moduleClass);
-        const repositories = ModuleMetadata.getRepositories(moduleClass);
-        const services = ModuleMetadata.getServices(moduleClass);
+        const components = ModuleMetadata.getComponents(moduleClass);
         const dependencies = ModuleMetadata.getDependencies(moduleClass);
         const enabled = ModuleMetadata.isEnabled(moduleClass);
         const version = ModuleMetadata.getVersion(moduleClass);
         const config = ModuleMetadata.getConfig(moduleClass);
 
         try {
-            // Проверяем зависимости
             for (const dep of dependencies) {
                 if (!this.modules.has(dep)) {
                     throw new Error(`Module "${name}" depends on "${dep}" which is not registered`);
@@ -83,18 +76,16 @@ export class ModuleContainer {
             this.modules.set(name, {
                 class: moduleClass,
                 name,
-                useCases,
-                repositories,
-                services,
+                components,
                 dependencies,
                 enabled,
                 version,
                 config
             });
 
-            this.registerComponents(useCases, 'useCases');
-            this.registerComponents(repositories, 'repositories');
-            this.registerComponents(services, 'services');
+            for (const component of components) {
+                this.registerComponent(component);
+            }
         } catch (error) {
             // Если декораторы недоступны или ошибка чтения метаданных - игнорируем
             if ((error as Error).message?.includes('Metadata')) {
@@ -105,31 +96,25 @@ export class ModuleContainer {
         }
     }
 
-    private registerComponents(components: any[], componentType: string) {
-        for (const component of components) {
-            this.registerComponent(component, componentType);
-        }
-    }
-
-    private registerComponent(component: any = {}, componentType: string) {
+    registerComponent(component: any = {}) {
         const componentClass = component.class || component;
         const componentName = ComponentMetadata.getName(componentClass);
-        const scope = component.scope || ComponentMetadata.getScope(componentClass) || 'request';
 
         if (this.container.has(componentName)) {
-            console.warn(`[ModuleContainer] ${componentType}: "${componentName}" already registered, skipping...`);
+            console.warn(`[ModuleContainer] "${componentName}" already registered, skipping...`);
             return;
         }
 
         try {
-            const dependencies = UseCaseMetadata.getDependencies(componentClass);
+            const scope = component.scope || ComponentMetadata.getScope(componentClass) || 'request';
+            const dependencies = ComponentMetadata.getDependencies(componentClass);
 
             this.container.setFactory(componentName, () => {
                 const resolvedDeps = dependencies.map((depName: string) => this.container.get(depName));
                 return new componentClass(...resolvedDeps);
             }, scope as Scope);
         } catch (error) {
-            console.warn(`[ModuleContainer] ${componentType}: "${componentName}" failed to read metadata, skipping module registration...`, error);
+            console.warn(`[ModuleContainer] "${componentName}" failed to read metadata, skipping module registration...`, error);
         }
     }
 
@@ -164,15 +149,15 @@ export class ModuleContainer {
     /**
      * Получает все UseCase по модулю
      */
-    getUseCasesByModule(moduleName: string): any[] {
+    getComponentsByModule(moduleName: string): any[] {
         const module = this.modules.get(moduleName);
-        return module ? module.useCases : [];
+        return module ? module.components : [];
     }
 
     /**
      * Возвращает UseCase по имени
      */
-    getUseCase<T>(name: string): T {
+    getComponent<T>(name: string): T {
         return this.container.get<T>(name);
     }
 

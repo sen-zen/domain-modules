@@ -185,5 +185,6 @@ export class Container implements IContainer {
         const factory = () => value;
         this.setFactory(key, factory, 'singleton');
     }
+
 }
 
