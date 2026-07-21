@@ -1,7 +1,7 @@
 import { Container, type ContainerOptions } from './Container';
 import { ComponentMetadata } from '@/decorators/Component';
 import { ModuleMetadata } from '@/decorators/Module';
-import { Scope } from "@/types";
+import { Scope, ComponentRegistry } from "@/types";
 
 export interface ModuleInfo {
     name: string;
@@ -45,14 +45,19 @@ export class ModuleContainer {
     }
 
     /**
-     * Регистрирует зависимость (для Scanner)
+     * Регистрирует зависимость
      */
-    register<T>(key: string, value?: T): void {
-        try {
-            this.container.setSingleton(key, value || (() => null));
-        } catch (error) {
-            console.warn(`[ModuleContainer] Failed to register "${key}":`, error);
-        }
+    register<T>(key: string, value: T, scope: Scope): this {
+        this.container.set(key, value, scope);
+        return this;
+    }
+
+    /**
+     * Регистрирует фабрику
+     */
+    registerFactory<T>(key: string, factory: () => T, scope: Scope = 'singleton'): this {
+        this.container.setFactory(key, factory, scope);
+        return this;
     }
 
     /**
@@ -107,10 +112,13 @@ export class ModuleContainer {
 
         try {
             const scope = component.scope || ComponentMetadata.getScope(componentClass) || 'request';
-            const dependencies = ComponentMetadata.getDependencies(componentClass);
+            const dependencies = component.dependencies || ComponentMetadata.getDependencies(componentClass);
 
             this.container.setFactory(componentName, () => {
-                const resolvedDeps = dependencies.map((depName: string) => this.container.get(depName));
+                const resolvedDeps = dependencies.map((depName: string) => {
+                    return this.container.get(depName);
+                });
+
                 return new componentClass(...resolvedDeps);
             }, scope as Scope);
         } catch (error) {
@@ -126,8 +134,20 @@ export class ModuleContainer {
     }
 
     /**
+     * Регистрирует фабрику зависимости в контейнера
+     */
+    setFactory<K extends keyof ComponentRegistry>(key: K, factory: () => ComponentRegistry[K], scope: Scope): this;
+    setFactory<T>(key: string, factory: () => T, scope: Scope): this;
+    setFactory<T>(key: string, factory: () => T, scope: Scope = 'singleton'): this {
+        this.container.setFactory(key, factory, scope);
+        return this;
+    }
+
+    /**
      * Получает зависимость из контейнера
      */
+    get<K extends keyof ComponentRegistry>(key: K): ComponentRegistry[K];
+    get<T>(key: string): T;
     get<T>(key: string): T {
         return this.container.get<T>(key);
     }

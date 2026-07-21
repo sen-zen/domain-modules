@@ -88,18 +88,27 @@ export class ModuleScanner {
                 return this;
             }
 
+            const path = await import('node:path');
             const graph = new DependencyGraph();
-            const moduleDirs = new Set<string>();
+            const componentDirs = new Set<string>();
 
             modules.forEach(({ module, moduleDir }) => {
                 graph.addNode({
                     nodeClass: module,
-                    nodeDir: moduleDir,
                     name: ModuleMetadata.getName(module),
                     dependencies: ModuleMetadata.getDependencies(module)
                 });
 
-                moduleDirs.add(moduleDir);
+                const components = ModuleMetadata
+                    .getComponents(module)
+                    .filter(v => typeof v === "string")
+                    .map(componentPath => path.join(moduleDir, componentPath));
+
+                if (components.length) {
+                    components.forEach(dir => componentDirs.add(dir));
+                } else {
+                    componentDirs.add(moduleDir);
+                }
             });
 
             const sortedModules = graph.sort();
@@ -108,14 +117,15 @@ export class ModuleScanner {
                 this.registerModule(node.nodeClass);
             }
 
-            for (const moduleDir of moduleDirs) {
-                if (!this.scannedDirs.has(moduleDir)) {
+            for (const dir of componentDirs) {
+                if (!this.scannedDirs.has(dir)) {
                     if (this.options.log) {
-                        console.info(`[ModuleScanner] Scanning components in: ${moduleDir}`);
+                        console.info(`[ModuleScanner] Scanning components in: ${dir}`);
                     }
 
-                    await this.scanComponents(moduleDir);
-                    this.scannedDirs.add(moduleDir);
+                    await this.scanComponents(dir);
+
+                    this.scannedDirs.add(dir);
                 }
             };
 
@@ -146,10 +156,9 @@ export class ModuleScanner {
             return this;
         }
 
-        components.forEach(({ module, moduleDir }) => {
+        components.forEach(({ module }) => {
             graph.addNode({
                 nodeClass: module,
-                nodeDir: moduleDir,
                 name: ComponentMetadata.getName(module),
                 dependencies: ComponentMetadata.getDependencies(module)
             });
@@ -162,7 +171,14 @@ export class ModuleScanner {
             const name = ComponentMetadata.getName(component);
 
             if (!this.container.has(name)) {
-                this.container.registerComponent(component);
+                const scope = ComponentMetadata.getScope(component);
+                const dependencies = ComponentMetadata.getDependencies(component);
+
+                this.container.registerComponent({
+                    class: component,
+                    scope: scope,
+                    dependencies: dependencies,
+                });
 
                 if (this.options.log) {
                     console.info(`[ModuleScanner] Registered component: ${name}`);

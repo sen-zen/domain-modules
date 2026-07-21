@@ -1,8 +1,8 @@
-import type { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
-import { UserId } from '../../../user/domain/value-objects/UserId';
-import { RefreshToken } from '../../domain/entities/RefreshToken';
+import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
+import { UserId } from '@user/domain/value-objects/UserId';
+import { RefreshToken } from '@auth/domain/entities/RefreshToken';
+import { PrismaRepository } from '@core/infrastructure/repositories/PrismaRepository';
 import { RefreshTokenMapper } from '../mappers/RefreshTokenMapper';
-import { PrismaRepository } from '../../../core/infrastructure/repositories/PrismaRepository';
 
 /**
  * Реализация репозитория через Prisma для управления Refresh токенами

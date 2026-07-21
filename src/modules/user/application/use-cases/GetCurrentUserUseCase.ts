@@ -3,7 +3,7 @@ import { NotFoundError } from '@/errors';
 import { UseCase } from '@core/application';
 import { UserId } from '@user/domain/value-objects/UserId';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
-import type { UserDomainRepository } from '@user/domain/repositories/IUserRepository';
+import type { IUserRepository } from '@user/domain/repositories/IUserRepository';
 
 export type GetCurrentUserResponse = {
     user: {
@@ -18,7 +18,7 @@ export type GetCurrentUserResponse = {
 export class GetCurrentUserUseCase extends UseCase<string | undefined, GetCurrentUserResponse> {
     constructor(
         private readonly tokenService: ITokenService,
-        private readonly userRepository: UserDomainRepository
+        private readonly userRepository: IUserRepository
     ) {
         super();
     }

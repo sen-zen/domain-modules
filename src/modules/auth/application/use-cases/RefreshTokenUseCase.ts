@@ -1,6 +1,6 @@
-import { ITokenService } from '@auth/domain/services/ITokenService';
+import type { ITokenService } from '@auth/domain/services/ITokenService';
+import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
 import { RefreshToken } from '@auth/domain/entities/RefreshToken';
-import { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
 import { RefreshTokenCommand } from '@auth/application/commands/RefreshTokenCommand';
 import { UnauthorizedError, NotFoundError } from '@/errors';
 import { Result } from '@/utils/result';

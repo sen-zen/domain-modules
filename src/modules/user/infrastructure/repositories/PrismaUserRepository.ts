@@ -3,11 +3,11 @@ import { UserMapper } from '@user/infrastructure/mappers/UserMapper';
 import { UserId } from '@user/domain/value-objects/UserId';
 import { Password } from '@core/domain/value-objects/Password';
 import { Email } from '@core/domain/value-objects/Email';
-import { UserAuthData } from '@user/domain/repositories/IUserRepository.types';
-import type { UserDomainRepository } from '@user/domain/repositories/IUserRepository';
+import type { UserAuthData } from '@user/domain/repositories/IUserRepository.types';
+import type { IUserRepository } from '@user/domain/repositories/IUserRepository';
 
 
-export class PrismaUserRepository extends PrismaRepository implements UserDomainRepository {
+export class PrismaUserRepository extends PrismaRepository implements IUserRepository {
 
     async findById(id: UserId): Promise<ReturnType<typeof UserMapper.toDomain> | null> {
         const user = await this.prisma.user.findUnique({

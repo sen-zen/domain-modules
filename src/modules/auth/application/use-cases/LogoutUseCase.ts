@@ -1,8 +1,8 @@
-import { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
-import { UserId } from '../../../user/domain/value-objects/UserId';
+import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
+import { UserId } from '@user/domain/value-objects/UserId';
 import { Component } from '@/decorators/Component';
 
-@Component({ dependencies: ['IRefreshTokenRepository'] })
+@Component({ dependencies: ['RefreshTokenRepository'] })
 export class LogoutUseCase {
     constructor(
         private readonly refreshTokenRepository: IRefreshTokenRepository

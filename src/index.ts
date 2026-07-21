@@ -1,7 +1,7 @@
-import { ModuleScanner, ModuleContainer } from './di';
+import { ModuleScanner, ModuleContainer, ContainerOptions } from './di';
 
-export async function initializeCore() {
-    const moduleContainer = new ModuleContainer();
+export async function initializeCore(options: ContainerOptions) {
+    const moduleContainer = new ModuleContainer(options);
     const scanner = new ModuleScanner(moduleContainer);
 
     await scanner.scan('./modules');

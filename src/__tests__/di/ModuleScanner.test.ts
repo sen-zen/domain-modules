@@ -157,6 +157,7 @@ describe('ModuleScanner', () => {
     describe('scanComponents()', () => {
         it('должен сканировать директорию и регистрировать компоненты', async () => {
             const dir = await makeTempDir();
+
             await createTestComponentFile(dir, 'UserRepository', {
                 scope: 'singleton',
                 dependencies: ['PrismaClient']
@@ -168,6 +169,10 @@ describe('ModuleScanner', () => {
             await createTestComponentFile(dir, 'LoginUseCase', {
                 scope: 'request',
                 dependencies: ['UserRepository', 'TokenService']
+            });
+            await createTestComponentFile(dir, 'PrismaClient', {
+                scope: 'singleton',
+                dependencies: []
             });
 
             await scanner.scanComponents(dir);

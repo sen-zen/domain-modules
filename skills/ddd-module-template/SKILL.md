@@ -566,8 +566,8 @@ export async function initializeCore() {
 
 ```typescript
 // packages/api/src/routers/[module].ts
-import { moduleContainer } from '@tastehub/core';
-import { Create[Entity]UseCase, Get[Entity]UseCase } from '@tastehub/core';
+import { moduleContainer } from '@domain/modules';
+import { Create[Entity]UseCase, Get[Entity]UseCase } from '@domain/modules';
 
 export const [module]Router = router({
     create: protectedProcedure
@@ -622,3 +622,14 @@ export const [module]Router = router({
 
 **Готово!** 🚀
 ```
+
+---
+
+## 🔗 Связанные скиллы
+
+| Скилл | Описание | Когда использовать |
+|-------|----------|-------------------|
+| [DDD Discovery](../ddd-discovery/SKILL.md) | Текущий скилл | Перед началом разработки |
+| [DDD Архитектура](../ddd-architecture/SKILL.md) | Реализация архитектуры | После discovery, при разработке |
+| [DDD Module Template](../ddd-module-template/SKILL.md) | Создание модуля | При создании нового модуля |
+| [DDD Code Review](../ddd-code-review/SKILL.md) | Проверка кода | При Code Review |

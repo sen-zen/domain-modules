@@ -1,125 +1,228 @@
 ---
 name: "ddd-architecture"
-description: "Архитектура на основе Domain-Driven Design для AI. Реализует модульную архитектуру ограниченных контекстов с четким разделением ответственности и паттерном микроядра."
+description: "Архитектура на основе Domain-Driven Design (DDD) с чистыми слоями, Dependency Injection и модульной структурой. Реализует паттерн инверсии зависимостей через декораторы @Module и @Component."
 ---
 
-# DDD Архитектура
+# DDD Архитектура — Чистые слои и DI
 
-## Что делает этот скилл
+> **📚 Связанные документы:**
+> - [DDD Чеклист проверки кода](../ddd-code-review/SKILL.md) — полное описание архитектуры
+> - [DDD Module Template](../ddd-module-template/SKILL.md) — шаблон создания модулей
 
-Проектирует и реализует архитектуру на основе Domain-Driven Design (DDD) для AI, декомпозируя большие объекты в ограниченные контексты, реализуя паттерны чистой архитектуры и обеспечивая модульную, тестируемую структуру кода.
+---
 
-## Чистая архитектура
-Архитектура Дяди Боба с явным правилом зависимостей.
+## 🎯 Что делает этот скилл
+
+Проектирует и реализует архитектуру на основе **Domain-Driven Design** (DDD) с разделением ответственности:
+- **Чистый Domain слой** без внешних зависимостей
+- **Application слой** для оркестрации бизнес-процессов (Use Cases)
+- **Infrastructure слой** для реализации репозиториев и сервисов
+- **Presentation слой** для взаимодействия с внешним миром
+
+Добавляет **Dependency Injection** через декораторы `@Module` и `@Component`, обеспечивает тестируемость за счёт разделения интерфейсов от имплементаций.
+
+---
+
+## 🏗️ Архитектурные принципы
+
+### ✅ Инверсия зависимостей (Dependency Inversion)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  Frameworks & Drivers                       │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │               Interface Adapters                    │    │
-│  │  ┌─────────────────────────────────────────────┐    │    │
-│  │  │            Application Business Rules       │    │    │
-│  │  │  ┌─────────────────────────────────────┐    │    │    │
-│  │  │  │    Enterprise Business Rules        │    │    │    │
-│  │  │  │         (Entities)                  │    │    │    │
-│  │  │  └─────────────────────────────────────┘    │    │    │
-│  │  │            (Use Cases)                      │    │    │
-│  │  └─────────────────────────────────────────────┘    │    │
-│  │      (Controllers, Gateways, Presenters)            │    │
-│  └─────────────────────────────────────────────────────┘    │
-│          (Web, DB, Devices, External Interfaces)            │
+│                  PRESENTATION (tRPC, Web)                    │
+│  - Использует UseCases и Repositories из верхних слоёв      │
+│  - Используе MobX для управления состоянием                 │
 └─────────────────────────────────────────────────────────────┘
-              Dependencies point INWARD only
+                             ↓
+┌─────────────────────────────────────────────────────────────┐
+│               APPLICATION (Use Cases + Commands)             │
+│  - Оркестирация бизнес-процессов                            │
+│  - Использует Domain интерфейсы и Entity                   │
+│  - Возвращает Result<T> для управления ошибками            │
+└─────────────────────────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────┐
+│                     DOMAIN                                   │
+│  - Сущности (Entities) с бизнес-логикой                    │
+│  - Value Objects (неизменяемые, самовалидирующиеся)        │
+│  - Repository Interfaces (без Prisma!)                     │
+│  - Service Interfaces                                       │
+│  ❌ НЕТ зависимостей от внешних фреймворков                 │
+└─────────────────────────────────────────────────────────────┘
+                             ↓
+┌─────────────────────────────────────────────────────────────┐
+│                INFRASTRUCTURE                                │
+│  - Реализации Repository интерфейсов (через Prisma)         │
+│  - Реализации Service интерфейсов                           │
+│  - Mapper (Prisma ↔ Domain)                                 │
+│  ✅ Только здесь используется @prisma/client               │
+└─────────────────────────────────────────────────────────────┘
 ```
-### Слои
 
-| Слой | Использует | Не использует |
-|------|------------|---------------|
-| **Domain** | Чистый TS | Prisma, tRPC, Next.js, DI |
-| **Application** | Domain | Prisma, tRPC, Next.js |
-| **Infrastructure** | Domain, Prisma | tRPC, Next.js |
-| **Presentation** | Application, Infrastructure | - |
-
+---
 
 ## 📁 Структура проекта packages/core/src/
 
 ```
-decorators/                         # Декораторы
-└── Module.ts                       # @Module декоратор
+decorators/                        # Декораторы DI
+├── Component.ts                   # @Component декоратор для компонентов
+│   ├── name?: string              # Имя компонента
+│   ├── scope?: Scope              # request, singleton, transient
+│   └── dependencies?: string[]    # Зависимости
+│
+└── Module.ts                      # @Module декоратор для модулей
+    ├── description: string        # Описание модуля
+    ├── version?: string           # Версия модуля
+    ├── components: any[]          # UseCase'ы модуля
+    ├── enabled?: boolean          # Включен ли модуль
+    └── config?: Record<string, any>
 
-di/                                 # Dependency Injection
-├── Container.ts                    # Базовый DI контейнер
-├── ModuleContainer.ts              # Контейнер модулей
-├── ModuleScanner.ts                # Сканер модулей
-├── ServiceContainer.ts             # Сервисный контейнер
-└── index.ts
+di/                                # Dependency Injection
+├── Container.ts                   # Базовый DI контейнер
+│   ├── set(key, value, scope)     # Регистрация зависимости
+│   ├── get(key, requestId?)       # Получение зависимости
+│   ├── setFactory(key, factory)   # Фабрика для lazy creation
+│   └── createChild()              # Создание дочернего контейнера
+│
+├── ModuleContainer.ts             # Контейнер для модулей
+├── ModuleScanner.ts               # Авто-сканер модулей через fs
+│   ├── scan(directory)            # Сканирование .module.* файлов
+│   ├── scanComponents(directory)  # Сканирование @Component
+│   └── getResult()                # Результат сканирования
+│
+├── ServiceContainer.ts            # Контейнер для сервисов
+└── UseCaseRegistry.ts             # Регистр UseCase'ов
 
-errors/                             # Ошибки
-├── ApplicationError.ts
-├── ConflictError.ts
-├── DomainError.ts
-├── NotFoundError.ts
-├── UnauthorizedError.ts
-├── UseCaseError.ts
-└── ValidationError.ts
+errors/                            # Иерархия ошибок
+├── ApplicationError.ts            # Базовый класс
+├── DomainError.ts                 # Доменная ошибка
+├── UnauthorizedError.ts           # Неавторизован
+├── NotFoundError.ts               # Ресурс не найден
+├── ConflictError.ts               # Конфликт ресурсов
+└── ValidationError.ts             # Валидация данных
 
-types/                              # Общие типы
-├── device.ts
-├── index.ts
-└── token.ts
+types/                             # Общие типы
+├── device.ts                      # Типы устройств и sessions
+├── index.ts                       # Экспорт типов
+└── token.ts                       # JWT токены
 
-utils/                              # Утилиты
-├── result.ts
-└── types.ts
+utils/                             # Утилиты
+└── result.ts                      # Result<T> pattern (Ok/Either)
+    ├── ok(value: T)               # Успешный результат
+    ├── fail(error: Error | string) # Ошибочный результат
+    └── isFailure(value)           # Проверка на ошибку
+
 
 modules/
-├── auth/                                                         # Модуль авторизации
+├── auth/                         # Модуль авторизации
 │   ├── application/
-│   │   ├── commands/ (LoginCommand, RefreshTokenCommand)
-│   │   ├── use-cases/ (LoginUseCase, LogoutUseCase, RefreshTokenUseCase)
-│   │   └── __tests__/
+│   │   ├── index.ts              # Экспорт UseCases, Commands
+│   │   ├── commands/             # Команды
+│   │   │   ├── index.ts
+│   │   │   ├── LoginCommand.ts   # { email, password, userAgent }
+│   │   │   ├── RefreshTokenCommand.ts
+│   │   └── use-cases/            # Use Cases
+│   │       ├── index.ts
+│   │       ├── LoginUseCase.ts
+│   │       ├── LogoutUseCase.ts
+│   │       └── RefreshTokenUseCase.ts
 │   ├── domain/
-│   │   ├── entities/ (RefreshToken, Session, User)
-│   │   ├── repositories/ (IRefreshTokenRepository, IUserRepository)
-│   │   └── services/ (ITokenService)
+│   │   ├── entities/
+│   │   │   ├── RefreshToken.ts   # Entity с токеном и userId
+│   │   │   ├── Session.ts        # Сессия пользователя
+│   │   │   └── index.ts
+│   │   ├── repositories/
+│   │   │   ├── IUserRepository.ts         # Interface без Prisma
+│   │   │   ├── IRefreshTokenRepository.ts # RefreshToken operations
+│   │   │   ├── IUserRepository.types.ts   # DTO для findAuthData
+│   │   │   └── index.ts
+│   │   ├── services/
+│   │   │   ├── ITokenService.ts          # JWT генерация
+│   │   │   └── index.ts
+│   │   └── index.ts                     # Экспорт всех domain частей
 │   ├── infrastructure/
-│   │   ├── config/ (JWTConfig)
-│   │   ├── mappers/ (RefreshTokenMapper)
-│   │   ├── repositories/ (PrismaRefreshTokenRepository, PrismaUserRepository via core)
-│   │   └── services/ (JWTTokenService)
-│   ├── auth.module.ts                                            # Регистрация модуля
-│   └── index.ts (с экспортами)
-├── core/                                                         # Базовый модуль
-│   ├── application/                                              # Базовый Application слой
-│   │   └── use-cases/
-│   │       └── UseCase.ts                                        # Базовый класс UseCase
-│   ├── domain/                                                   # Общий Domain слой
-│   │   ├── value-objects/                                        # Общие VO (Email, ExpiresAt, etc.)
-│   │   └── entities/
-│   └── infrastructure/ (PrismaRepository, JWTTokenService)       # Infrastructure слой модуля
-└── user/                                                         # Модуль пользователей
+│   │   ├── config/
+│   │   │   ├── index.ts
+│   │   │   └── JWTConfig.ts             # Секреты и настройки JWT
+│   │   ├── mappers/
+│   │   │   ├── index.ts
+│   │   │   └── RefreshTokenMapper.ts    # Prisma ↔ Domain маппинг
+│   │   ├── repositories/
+│   │   │   ├── index.ts
+│   │   │   └── PrismaRefreshTokenRepository.ts
+│   │   └── services/
+│   │       ├── index.ts
+│   │       └── JWTTokenService.ts       # Реализация ITokenService
+│   ├── auth.module.ts             # Регистрация модуля через @Module
+│   └── index.ts                   # Экспорт всего модуля
+│
+├── core/                         # Базовые компоненты
+│   ├── application/
+│   │   ├── index.ts
+│   │   └── UseCase.ts             # Абстрактный базовый класс
+│   │       ├── execute(input): Promise<Result<T>>
+│   │       ├── protected ok<T>(value: T): Result<T>
+│   │       ├── protected fail(error): Result<T>
+│   │       └── protected tryCatch(fn): Result<T>
+│   ├── domain/
+│   │   ├── value-objects/         # Общие Value Objects
+│   │   │   ├── Email.ts           # Самовалидирующийся email
+│   │   │   ├── Password.ts        # Хешированный пароль (bcrypt)
+│   │   │   ├── ExpiresAt.ts       # Дата истечения токена
+│   │   │   └── index.ts
+│   │   ├── entities/              # Общие сущности
+│   │   └── index.ts               # Экспорт всех domain частей
+│   ├── infrastructure/
+│   │   └── repositories/
+│   │       ├── PrismaRepository.ts # Базовая репозиторий для Prisma
+│   │       └── index.ts
+│   └── core.module.ts             # Регистрация CoreModule
+│
+└── user/                         # Модуль пользователей
     ├── application/
-    │   ├── commands/ (ChangePasswordCommand, UpdateProfileCommand)
-    │   └── use-cases/ (GetCurrentUserUseCase)
+    │   ├── commands/
+    │   │   ├── ChangePasswordCommand.ts
+    │   │   ├── UpdateProfileCommand.ts
+    │   │   └── index.ts
+    │   └── use-cases/
+    │       ├── GetCurrentUserUseCase.ts
+    │       └── index.ts
     ├── domain/
-    │   ├── entities/ (User)
-    │   └── repositories/ (IUserRepository)
+    │   ├── entities/
+    │   │   ├── User.ts            # Сущность пользователя
+    │   │   │   ├── id: UserId     # Value Object для ID
+    │   │   │   ├── email: Email   # Value Object для email
+    │   │   │   ├── passwordHash?: Password
+    │   │   │   └── refreshTokens: RefreshToken[]
+    │   │   └── index.ts
+    │   ├── value-objects/
+    │   │   ├── UserId.ts          # Value Object для UUID
+    │   │   └── index.ts
+    │   ├── repositories/
+    │   │   ├── IUserRepository.ts
+    │   │   └── index.ts
+    │   └── index.ts               # Экспорт всех domain частей
     ├── infrastructure/
-    │   ├── mappers/ (UserMapper)
-    │   └── repositories/ (PrismaUserRepository)
-    └── user.module.ts
-...N                                                              # Модули остальные
+    │   ├── mappers/
+    │   │   └── UserMapper.ts      # PrismaUser ↔ Domain User
+    │   └── repositories/
+    │       └── PrismaUserRepository.ts
+    └── user.module.ts             # Регистрация модуля через @Module
 
 ```
 
+---
+
 ## 🏗️ Доменный слой (Domain)
+
 ### ✅ Правила для Domain:
 
-1. **Нет зависимостей** от внешнего мира
-2. **Нет импортов** из `@prisma/client`, `@trpc/server`, `next`
-3. **Чистый TypeScript** без фреймворков
-4. **Бизнес-логика** внутри сущностей
-5. **Value Objects** — неизменяемые, самовалидирующиеся
+1. **Нет зависимостей** от внешнего мира (`@prisma/client`, `@trpc/server`, `next`)
+2. **Чистый TypeScript** без фреймворков
+3. **Бизнес-логика** внутри сущностей
+4. **Value Objects** — неизменяемые, самовалидирующиеся
+
+---
 
 ### Value Objects
 
@@ -127,7 +230,7 @@ modules/
 // packages/core/src/domain/shared/value-objects/Email.ts
 export class Email {
     private static readonly EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
+
     private constructor(private readonly _value: string) {
         if (!Email.isValid(_value)) {
             throw new ValidationError('Invalid email format');
@@ -149,9 +252,7 @@ export class Email {
 }
 ```
 
-### Репозиторий (Интерфейс)
-
-1. ❌ НЕТ зависимости от Prisma!
+### Репозиторий (Интерфейс) — БЕЗ зависимостей от Prisma
 
 ```typescript
 // packages/core/src/modules/auth/domain/repositories/IUserRepository.ts
@@ -168,32 +269,13 @@ export interface IUserRepository {
 }
 ```
 
-### Сущность
+### Сущность (Entity) с бизнес-логикой
 
 ```typescript
-// packages/core/src/modules/auth/domain/entities/User.ts
-import { RefreshToken } from '../../../auth/domain/entities/RefreshToken';
+// packages/core/src/modules/user/domain/entities/User.ts
 import { UserId } from '../value-objects/UserId';
 import { Email } from '../../../core/domain/value-objects/Email';
 import { Password } from '../../../core/domain/value-objects/Password';
-
-export interface UserPrimitives {
-    id: string;
-    email: string;
-    username: string | null;
-    passwordHash: string | null;
-    avatar: string | null;
-    profilePictureUrl: string | null;
-    bio: string | null;
-    languageCode: string;
-    countryCode: string | null;
-    subscriptionStatus: boolean;
-    verificationToken: string | null;
-    verificationTokenExpiresAt: Date | null;
-    roleId: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-}
 
 export class User {
     private constructor(
@@ -202,25 +284,13 @@ export class User {
         private _username: string | null = null,
         private _passwordHash: Password | null = null,
         private _avatar: string | null = null,
-        private _profilePictureUrl: string | null = null,
-        private _bio: string | null = null,
         private _languageCode: string = "ru",
-        private _countryCode: string | null = null,
-        private _subscriptionStatus: boolean,
-        private _verificationToken: string | null = null,
-        private _verificationTokenExpiresAt: Date | null = null,
-        private _roleId: string | null = null,
         public readonly createdAt: Date,
         public readonly updatedAt: Date,
         private _refreshTokens: RefreshToken[] = []
     ) { }
 
-    static create(data: {
-        email: string;
-        username?: string;
-        password?: string;
-        languageCode?: string;
-    }): User {
+    static create(data: { email: string; username?: string; password?: string }): User {
         const now = new Date();
         const email = Email.create(data.email);
         const password = data.password ? Password.create(data.password) : null;
@@ -231,192 +301,21 @@ export class User {
             data.username,
             password,
             null,
-            null,
-            null,
-            data.languageCode,
-            null,
-            false,
-            null,
-            null,
-            null,
+            "ru",
             now,
             now,
             []
         );
     }
 
-    static reconstitute(primitives: UserPrimitives): User {
-        return new User(
-            UserId.create(primitives.id),
-            Email.create(primitives.email),
-            primitives.username,
-            primitives.passwordHash ? Password.fromHash(primitives.passwordHash) : null,
-            primitives.avatar,
-            primitives.profilePictureUrl,
-            primitives.bio,
-            primitives.languageCode,
-            primitives.countryCode,
-            primitives.subscriptionStatus,
-            primitives.verificationToken,
-            primitives.verificationTokenExpiresAt,
-            primitives.roleId,
-            primitives.createdAt,
-            primitives.updatedAt,
-            []
-        );
-    }
-
-    get passwordHash(): Password | null {
-        return this._passwordHash;
-    }
-
-    get email(): Email {
-        return this._email;
-    }
-
-    get username(): string | null {
-        return this._username;
-    }
-
-    get avatar(): string | null {
-        return this._avatar;
-    }
-
-    get profilePictureUrl(): string | null {
-        return this._profilePictureUrl;
-    }
-
-    get bio(): string | null {
-        return this._bio;
-    }
-
-    get languageCode(): string {
-        return this._languageCode;
-    }
-
-    get countryCode(): string | null {
-        return this._countryCode;
-    }
-
-    get subscriptionStatus(): boolean {
-        return this._subscriptionStatus;
-    }
-
-    get verificationToken(): string | null {
-        return this._verificationToken;
-    }
-
-    get roleId(): string | null {
-        return this._roleId;
-    }
-
-    get isSubscribed(): boolean {
-        return this._subscriptionStatus;
-    }
-
-    get isVerified(): boolean {
-        return this._verificationToken === null;
-    }
-
+    get email(): Email { return this._email; }
+    
     changeEmail(newEmail: string): void {
         this._email = Email.create(newEmail);
     }
 
-    changeUsername(newUsername: string): void {
-        if (newUsername.length < 3) {
-            throw new Error('Username must be at least 3 characters');
-        }
-        this._username = newUsername;
-    }
-
     changePassword(newPassword: string): void {
         this._passwordHash = Password.create(newPassword);
-    }
-
-    updateProfile(data: {
-        avatar?: string;
-        profilePictureUrl?: string;
-        bio?: string;
-        languageCode?: string;
-        countryCode?: string;
-    }): void {
-        if (data.avatar !== undefined) this._avatar = data.avatar;
-        if (data.profilePictureUrl !== undefined) this._profilePictureUrl = data.profilePictureUrl;
-        if (data.bio !== undefined) this._bio = data.bio;
-        if (data.languageCode !== undefined) this._languageCode = data.languageCode;
-        if (data.countryCode !== undefined) this._countryCode = data.countryCode;
-    }
-
-    isVerifiedWithEmail(email: string): boolean {
-        return this._email.equals(Email.create(email)) && this.isVerified;
-    }
-
-    /**
-     * Устанавливает verificationToken для email верификации
-     */
-    setVerificationToken(token: string, expiresAt: Date): void {
-        this._verificationToken = token;
-        this._verificationTokenExpiresAt = expiresAt;
-    }
-
-    verifyEmail(): void {
-        if (this.isVerified) return;
-        this._verificationToken = null;
-        this._verificationTokenExpiresAt = null;
-    }
-
-    activateSubscription(): void {
-        this._subscriptionStatus = true;
-    }
-
-    deactivateSubscription(): void {
-        this._subscriptionStatus = false;
-    }
-
-    assignRole(roleId: string): void {
-        this._roleId = roleId;
-    }
-
-    addRefreshToken(token: RefreshToken): void {
-        this._refreshTokens.push(token);
-    }
-
-    canLogin(): boolean {
-        return this.isVerified && this._passwordHash !== null;
-    }
-
-    private domainEvents: any[] = [];
-
-    addDomainEvent(event: any): void {
-        this.domainEvents.push(event);
-    }
-
-    clearEvents(): void {
-        this.domainEvents = [];
-    }
-
-    getEvents(): any[] {
-        return [...this.domainEvents];
-    }
-
-    toPrimitives(): UserPrimitives {
-        return {
-            id: this.id.value,
-            email: this._email.value,
-            username: this._username,
-            passwordHash: this._passwordHash ? this._passwordHash.value : null,
-            avatar: this._avatar,
-            profilePictureUrl: this._profilePictureUrl,
-            bio: this._bio,
-            languageCode: this._languageCode,
-            countryCode: this._countryCode,
-            subscriptionStatus: this._subscriptionStatus,
-            verificationToken: this._verificationToken,
-            verificationTokenExpiresAt: this._verificationTokenExpiresAt,
-            roleId: this._roleId,
-            createdAt: this.createdAt,
-            updatedAt: this.updatedAt,
-        };
     }
 }
 ```
@@ -429,142 +328,31 @@ export class User {
 
 1. **Реализует интерфейсы** из Domain
 2. **Использует Prisma** для доступа к БД
-3. **Маппит** Prisma → Domain и обратно
-4. **Нет бизнес-логики**
+3. **Маппит** Prisma → Domain и обратно через Mapper
+4. **Нет бизнес-логики** — только маппинг и хранение данных
 
-### PrismaRefreshTokenRepository
+---
+
+### PrismaRepository (базовый класс)
+
 ```typescript
-import type { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
-import { UserId } from '../../../user/domain/value-objects/UserId';
-import { RefreshToken } from '../../domain/entities/RefreshToken';
-import { RefreshTokenMapper } from '../mappers/RefreshTokenMapper';
-import { PrismaRepository } from '../../../core/infrastructure/repositories/PrismaRepository';
+// packages/core/src/modules/core/infrastructure/repositories/PrismaRepository.ts
+import { PrismaClient } from '@prisma/client';
 
-export class PrismaRefreshTokenRepository extends PrismaRepository implements IRefreshTokenRepository {
-
-    async findById(id: string): Promise<ReturnType<typeof RefreshTokenMapper.toDomain> | null> {
-        const refreshToken = await this.prisma.refreshToken.findUnique({
-            where: { id }
-        });
-        return refreshToken ? RefreshTokenMapper.toDomain(refreshToken) : null;
-    }
-
-    async findByToken(token: string): Promise<ReturnType<typeof RefreshTokenMapper.toDomain> | null> {
-        const refreshToken = await this.prisma.refreshToken.findFirst({
-            where: { token }
-        });
-        return refreshToken ? RefreshTokenMapper.toDomain(refreshToken) : null;
-    }
-
-    async findByUserId(userId: UserId): Promise<ReturnType<typeof RefreshTokenMapper.toDomain>[]> {
-        const tokens = await this.prisma.refreshToken.findMany({
-            where: { userId: userId.value },
-            orderBy: { createdAt: 'desc' }
-        });
-        return tokens.map(RefreshTokenMapper.toDomain);
-    }
-
-    async findByFamilyId(familyId: string): Promise<ReturnType<typeof RefreshTokenMapper.toDomain>[]> {
-        const tokens = await this.prisma.refreshToken.findMany({
-            where: { familyId },
-            orderBy: { createdAt: 'desc' }
-        });
-        return tokens.map(RefreshTokenMapper.toDomain);
-    }
-
-    async save(refreshToken: RefreshToken): Promise<ReturnType<typeof RefreshTokenMapper.toDomain>> {
-        const data = RefreshTokenMapper.toPrismaCreate(refreshToken);
-        const token = await this.prisma.refreshToken.create({ data });
-        return RefreshTokenMapper.toDomain(token);
-    }
-
-    async update(refreshToken: RefreshToken): Promise<void> {
-        const data = RefreshTokenMapper.toPrismaUpdate(refreshToken);
-        await this.prisma.refreshToken.update({
-            where: { id: refreshToken.id },
-            data
-        });
-    }
-
-    async delete(id: string): Promise<void> {
-        await this.prisma.refreshToken.delete({
-            where: { id }
-        });
-    }
-
-    async revoke(id: string): Promise<void> {
-        await this.prisma.refreshToken.update({
-            where: { id },
-            data: { revokedAt: new Date() }
-        });
-    }
-
-    async revokeAllByUserId(userId: UserId): Promise<void> {
-        await this.prisma.refreshToken.updateMany({
-            where: { userId: userId.value, revokedAt: null },
-            data: { revokedAt: new Date() }
-        });
-    }
-
-    async revokeAllByFamilyId(familyId: string): Promise<void> {
-        await this.prisma.refreshToken.updateMany({
-            where: { familyId, revokedAt: null },
-            data: { revokedAt: new Date() }
-        });
-    }
-
-    async rotateAndRevoke(oldTokenId: string, newToken: RefreshToken): Promise<void> {
-        const now = new Date();
-        await this.prisma.$transaction(async (prisma) => {
-            await prisma.refreshToken.update({
-                where: { id: oldTokenId },
-                data: {
-                    revokedAt: now,
-                    replacedBy: newToken.id
-                }
-            });
-
-            const data = RefreshTokenMapper.toPrismaCreate(newToken);
-            await prisma.refreshToken.create({ data });
-        });
-    }
-
-    async revokeAllExcept(userId: UserId, tokenId: string): Promise<void> {
-        await this.prisma.refreshToken.updateMany({
-            where: {
-                userId: userId.value,
-                id: { not: tokenId },
-                revokedAt: null
-            },
-            data: { revokedAt: new Date() }
-        });
-    }
-
-
-    async updateLastUsed(id: string): Promise<void> {
-        await this.prisma.refreshToken.update({
-            where: { id },
-            data: { lastUsedAt: new Date() }
-        });
-    }
+export abstract class PrismaRepository {
+    protected constructor(private readonly prisma: PrismaClient) {}
 }
-
 ```
-### Маппер
+
+### RefreshTokenMapper — маппинг Prisma ↔ Domain
 
 ```typescript
 // packages/core/src/modules/auth/infrastructure/mappers/RefreshTokenMapper.ts
+import type { PrismaRefreshToken } from '@prisma/client';
 import { RefreshToken } from '../../domain/entities/RefreshToken';
-import { RefreshToken as PrismaRefreshToken } from '@tastehub/prisma'
 
 export class RefreshTokenMapper {
     static toDomain(prisma: PrismaRefreshToken) {
-        if (!prisma.token) {
-            throw new Error('Refresh token value is required');
-        }
-        if (!prisma.userId) {
-            throw new Error('User ID is required');
-        }
         return RefreshToken.reconstitute({
             id: prisma.id,
             token: prisma.token,
@@ -577,167 +365,11 @@ export class RefreshTokenMapper {
             ipAddress: prisma.ipAddress,
             deviceName: prisma.deviceName,
             createdAt: prisma.createdAt,
-            lastUsedAt: prisma.lastUsedAt,
         });
     }
 
-    static toPrisma(token: RefreshToken) {
-        const data = token.toPrimitives();
-        if (!data.token) {
-            throw new Error('Refresh token value is required');
-        }
-        if (!data.userId) {
-            throw new Error('User ID is required');
-        }
-        return {
-            id: data.id,
-            token: data.token,
-            familyId: data.familyId,
-            userId: data.userId,
-            expiresAt: data.expiresAt,
-            revokedAt: data.revokedAt,
-            replacedBy: data.replacedBy,
-            userAgent: data.userAgent,
-            ipAddress: data.ipAddress,
-            deviceName: data.deviceName,
-            createdAt: data.createdAt,
-            lastUsedAt: data.lastUsedAt,
-        } as PrismaRefreshToken;
-    }
-
-    static toDto(prisma: PrismaRefreshToken): {
-        id: string;
-        familyId: string;
-        userId: string;
-        expiresAt: Date;
-        isRevoked: boolean;
-        isExpired: boolean;
-        deviceName: string | null;
-        lastUsedAt: Date;
-        createdAt: Date;
-    } {
-        const now = new Date();
-        return {
-            id: prisma.id,
-            familyId: prisma.familyId,
-            userId: prisma.userId,
-            expiresAt: prisma.expiresAt,
-            isRevoked: prisma.revokedAt !== null,
-            isExpired: prisma.expiresAt < now,
-            deviceName: prisma.deviceName,
-            lastUsedAt: prisma.lastUsedAt,
-            createdAt: prisma.createdAt,
-        };
-    }
-
-    static toPublicDto(prisma: PrismaRefreshToken): {
-        id: string;
-        deviceName: string | null;
-        lastUsedAt: Date;
-        isActive: boolean;
-    } {
-        const now = new Date();
-        const isActive = prisma.revokedAt === null && prisma.expiresAt > now;
-        return {
-            id: prisma.id,
-            deviceName: prisma.deviceName,
-            lastUsedAt: prisma.lastUsedAt,
-            isActive,
-        };
-    }
-
-    static toDomainList(prismaTokens: PrismaRefreshToken[]): RefreshToken[] {
-        return prismaTokens.map(token => this.toDomain(token));
-    }
-
-    static toDtoList(prismaTokens: PrismaRefreshToken[]): ReturnType<typeof this.toDto>[] {
-        return prismaTokens.map(token => this.toDto(token));
-    }
-
-    static toPublicDtoList(prismaTokens: PrismaRefreshToken[]): ReturnType<typeof this.toPublicDto>[] {
-        return prismaTokens.map(token => this.toPublicDto(token));
-    }
-
-    static toPrismaUpdate(token: RefreshToken): Partial<PrismaRefreshToken> {
-        const data = token.toPrimitives();
-        return {
-            token: data.token,
-            familyId: data.familyId,
-            userId: data.userId,
-            expiresAt: data.expiresAt,
-            revokedAt: data.revokedAt,
-            replacedBy: data.replacedBy,
-            userAgent: data.userAgent,
-            ipAddress: data.ipAddress,
-            deviceName: data.deviceName,
-            lastUsedAt: data.lastUsedAt,
-        };
-    }
-
-    static toPrismaCreate(token: RefreshToken): Omit<PrismaRefreshToken, 'id' | 'createdAt' | 'lastUsedAt'> {
-        const data = token.toPrimitives();
-        if (!data.token) {
-            throw new Error('Refresh token value is required');
-        }
-        if (!data.userId) {
-            throw new Error('User ID is required');
-        }
-        return {
-            token: data.token,
-            familyId: data.familyId,
-            userId: data.userId,
-            expiresAt: data.expiresAt,
-            revokedAt: data.revokedAt,
-            replacedBy: data.replacedBy,
-            userAgent: data.userAgent,
-            ipAddress: data.ipAddress,
-            deviceName: data.deviceName,
-        }
-    }
-
-    static toPrismaLastUsed(id: string, lastUsedAt: Date): Partial<PrismaRefreshToken> {
-        return {
-            id,
-            lastUsedAt,
-        };
-    }
-
-    static toPrismaRevoke(id: string, revokedAt: Date): Partial<PrismaRefreshToken> {
-        return {
-            id,
-            revokedAt,
-        };
-    }
-
-    static toPrismaRotate(
-        oldTokenId: string,
-        newTokenId: string,
-        revokedAt: Date
-    ): Partial<PrismaRefreshToken> {
-        return {
-            id: oldTokenId,
-            revokedAt,
-            replacedBy: newTokenId,
-        };
-    }
-
-    static toStats(data: {
-        total: number;
-        active: number;
-        revoked: number;
-        expired: number;
-    }): {
-        total: number;
-        active: number;
-        revoked: number;
-        expired: number;
-    } {
-        return {
-            total: data.total,
-            active: data.active,
-            revoked: data.revoked,
-            expired: data.expired,
-        };
+    static toPrimitives(token: RefreshToken) {
+        return token.toPrimitives();
     }
 }
 ```
@@ -747,18 +379,22 @@ export class RefreshTokenMapper {
 ## 🏗️ Прикладной слой (Application)
 
 ### UseCase (Базовый класс)
+
 ```typescript
-// packages/core/src/application/use-cases/UseCase.ts
-import { Result } from '../../../utils/result';
+// packages/core/src/modules/core/application/UseCase.ts
+import type { Result } from '@/utils/result';
 
 export abstract class UseCase<TInput, TOutput> {
     abstract execute(input: TInput): Promise<Result<TOutput>>;
+    
     protected ok<TOutput>(value: TOutput): Result<TOutput> {
         return Result.ok(value);
     }
+    
     protected fail<TOutput>(error: Error | string): Result<TOutput> {
         return Result.fail(error);
     }
+    
     protected tryCatch<T>(fn: () => T): Result<T> {
         try {
             return this.ok(fn());
@@ -766,47 +402,18 @@ export abstract class UseCase<TInput, TOutput> {
             return this.fail(error instanceof Error ? error : String(error));
         }
     }
-    protected async tryCatchAsync<T>(fn: () => Promise<T>): Promise<Result<T>> {
-        try {
-            const result = await fn();
-            return this.ok(result);
-        } catch (error) {
-            return this.fail(error instanceof Error ? error : String(error));
-        }
-    }
 }
 ```
-### LoginUseCase
+
+### LoginUseCase — пример бизнес-процесса
 
 ```typescript
 // packages/core/src/modules/auth/application/use-cases/LoginUseCase.ts
-import { UseCase } from '../../../core/application/UseCase';
-import { LoginCommand } from '../commands/LoginCommand';
-
-import { Email } from '../../../core/domain/value-objects/Email';
-import { Password } from '../../../core/domain/value-objects/Password';
-import { RefreshToken } from '../../domain/entities/RefreshToken';
-import { NotFoundError, UnauthorizedError } from '../../../../errors';
-
-import type { Result } from '../../../../utils/result';
-import type { ITokenService } from '../../domain/services/ITokenService';
-import type { IUserRepository } from '../../domain/repositories/IUserRepository';
-import type { IRefreshTokenRepository } from '../../domain/repositories/IRefreshTokenRepository';
-
-type UserLoginResponse = {
-    id: string;
-    email: string;
-    name: string | null;
-    isVerified: boolean;
-    isBlocked: boolean;
-}
-
-export type LoginResponse = {
-    user: UserLoginResponse,
-    accessToken: string,
-    refreshToken: string,
-    expiresIn: number,
-}
+import { UseCase } from '@core/application/UseCase';
+import { LoginCommand } from '@auth/application/commands/LoginCommand';
+import { Email } from '@core/domain/value-objects/Email';
+import { NotFoundError, UnauthorizedError } from '@/errors';
+import type { Result } from '@/utils/result';
 
 export class LoginUseCase extends UseCase<LoginCommand, LoginResponse> {
     constructor(
@@ -816,74 +423,40 @@ export class LoginUseCase extends UseCase<LoginCommand, LoginResponse> {
     ) { super() }
 
     async execute(command: LoginCommand): Promise<Result<LoginResponse>> {
-        const emailResult = this.tryCatch(() => Email.create(command.email));
-        if (emailResult.isFailure) {
-            return this.fail(emailResult.error);
-        }
+        // Валидация email и password через Value Objects
+        const email = await this.tryCatch(() => Email.create(command.email));
+        if (email.isFailure) return this.fail(email.error);
 
-        const passwordResult = this.tryCatch(() => Password.create(command.password));
-        if (passwordResult.isFailure) {
-            return this.fail(passwordResult.error);
-        }
-
-        const email = emailResult.value;
+        // Проверка пользователя
         const user = await this.userRepository.findAuthData(email.value);
-
         if (!user) {
             return this.fail(new NotFoundError('User', undefined, { email: command.email }));
         }
 
+        // Проверка пароля через Value Object Password
         if (!user.passwordHash.verify(command.password)) {
             return this.fail(new UnauthorizedError('Invalid credentials'));
         }
 
-        const expires = this.tokenService.getExpiresIn();
+        // Генерация и сохранение токенa
         const tokens = await this.tokenService.generateTokens(user.id.value);
+        await this.refreshTokenRepository.save(RefreshToken.create({ ... }));
 
-        const refreshToken = tokens.refreshToken;
-        const familyId = tokens.familyId;
-        const refreshExpires = expires.refreshTokenExpiresIn;
-
-        await this.refreshTokenRepository.save(RefreshToken.create({
-            token: refreshToken,
-            familyId: familyId,
-            userId: user.id,
-            expiresIn: refreshExpires,
-            userAgent: command.userAgent,
-            ipAddress: command.ipAddress,
-            deviceName: command.deviceName
-        }));
-
-        return this.ok({
-            user: {
-                id: user.id.value,
-                email: user.email.value,
-                name: user.name,
-                isBlocked: false,
-                isVerified: user.isVerified
-            },
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken,
-            expiresIn: refreshExpires.seconds,
-        });
+        return this.ok({ user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
     }
 }
-
 ```
 
-## 🏗️ Модуль (Module)
+---
+
+## 🏗️ Модуль (Module) — через @Module декоратор
 
 ### auth.module.ts
-
 
 ```typescript
 import { Module } from "../../decorators/Module";
 
-import {
-    LoginUseCase,
-    LogoutUseCase,
-    RefreshTokenUseCase
-} from "./application/use-cases";
+import { LoginUseCase, LogoutUseCase, RefreshTokenUseCase } from "./application/use-cases";
 
 import { PrismaRefreshTokenRepository } from "./infrastructure/repositories";
 import { JWTTokenService } from "./infrastructure/services";
@@ -894,52 +467,56 @@ import { JWTTokenService } from "./infrastructure/services";
     version: '1.0.0',
 
     dependencies: ["CoreModule"],
-    useCases: [
+
+    components: [
         { class: LoginUseCase },
         { class: LogoutUseCase },
         { class: RefreshTokenUseCase }
     ],
+
     repositories: [
         { class: PrismaRefreshTokenRepository }
     ],
-    services: [{ class: JWTTokenService }],
-    config: {}
+
+    services: [{ class: JWTTokenService }]
 })
 export class AuthModule { }
 ```
+
+---
 
 ## 📊 Диаграмма зависимостей
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  PRESENTATION (tRPC, Web)                  │
-│  - Использует UseCases из Application                      │
-│  - Использует Repositories из Infrastructure               │
-│  - MobX Store для клиентского состояния                    │
+│                  PRESENTATION (tRPC, Web)                    │
+│  - Использует UseCases из Application                        │
+│  - Использует Repositories из Infrastructure                 │
+│  - MobX Store для клиентского состояния                      │
 └─────────────────────────────────────────────────────────────┘
-                            ↓
+                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                APPLICATION (Use Cases)                     │
-│  - Использует Domain Entities                              │
-│  - Использует Repository Interfaces                        │
-│  - Использует Service Interfaces                           │
+│                APPLICATION (Use Cases)                       │
+│  - Использует Domain Entities                                │
+│  - Использует Repository Interfaces                          │
+│  - Использует Service Interfaces                             │
+│  - Возвращает Result<T> для управления ошибками             │
 └─────────────────────────────────────────────────────────────┘
-                            ↓
+                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                     DOMAIN                                 │
-│  - Entities (бизнес-логика)                               │
-│  - Value Objects (неизменяемые)                           │
-│  - Repository Interfaces                                   │
-│  - Service Interfaces                                      │
-│  ❌ НЕТ зависимостей от внешнего мира!                    │
+│                     DOMAIN                                   │
+│  - Entities (бизнес-логика)                                 │
+│  - Value Objects (неизменяемые, самовалидирующиеся)         │
+│  - Repository Interfaces (без внешних зависимостей!)         │
+│  - Service Interfaces                                        │
 └─────────────────────────────────────────────────────────────┘
-                            ↓
+                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                INFRASTRUCTURE                              │
-│  - PrismaUserRepository (реализация IUserRepository)       │
-│  - JWTTokenService (реализация ITokenService)             │
-│  - Mappers (Prisma ↔ Domain)                              │
-│  ✅ Только здесь используется Prisma и JWT                │
+│                INFRASTRUCTURE                                │
+│  - PrismaUserRepository (реализация IUserRepository)         │
+│  - JWTTokenService (реализация ITokenService)               │
+│  - Mappers (Prisma ↔ Domain)                                │
+│  ✅ Только здесь используется Prisma и JWT                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -966,11 +543,11 @@ export class AuthModule { }
 ### Infrastructure:
 - ✅ Использует Prisma (`@prisma/client`)
 - ✅ Реализует Domain интерфейсы
-- ✅ Маппит Prisma ↔ Domain
+- ✅ Маппит Prisma ↔ Domain через Mapper
 - ❌ Нет бизнес-логики
 - ✅ Использует DI контейнер
 
-### Presentation:
+### Presentation (tRPC/Next.js):
 - ✅ Использует tRPC (`@trpc/server`)
 - ✅ Использует Next.js
 - ✅ Использует MobX на клиенте
@@ -981,4 +558,22 @@ export class AuthModule { }
 ## 🎯 Итог
 
 **Золотое правило:**
-> **Domain не знает о внешнем мире. Все зависимости направлены внутрь (к Domain).** 🚀
+> **Domain не знает о внешнем мире. Все зависимости направлены ВНУТРЬ (к Domain).** 🚀
+
+**Дополнительные возможности DI контейнера:**
+- **request scope** — создаётся новый экземпляр на каждый запрос (для stateless сервисов)
+- **singleton scope** — один экземпляр на всё приложение (для служебных сервисов)
+- **transient scope** — новый экземпляр при каждом `get()`
+- **setFactory()** — регистрация фабрик для lazy creation зависимостей
+- **createChild()** — создание дочернего контейнера с наследованием зависимостей
+
+---
+
+## 🔗 Связанные скиллы
+
+| Скилл | Описание | Когда использовать |
+|-------|----------|-------------------|
+| [DDD Discovery](../ddd-discovery/SKILL.md) | Текущий скилл | Перед началом разработки |
+| [DDD Архитектура](../ddd-architecture/SKILL.md) | Реализация архитектуры | После discovery, при разработке |
+| [DDD Module Template](../ddd-module-template/SKILL.md) | Создание модуля | При создании нового модуля |
+| [DDD Code Review](../ddd-code-review/SKILL.md) | Проверка кода | При Code Review |

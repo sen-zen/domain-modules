@@ -1,11 +1,23 @@
-import { Scope } from '../types';
+import { AsyncLocalStorage } from 'async_hooks';
+import type {
+    Scope,
+    CompatibleWith,
+    ComponentRegistry
+} from '../types';
 
 export interface IContainer {
+    get<K extends keyof ComponentRegistry>(key: K): ComponentRegistry[K];
     get<T>(key: string): T;
+
+    set<K extends keyof ComponentRegistry>(key: K, value: CompatibleWith<any, ComponentRegistry[K]>, scope?: Scope): this;
     set<T>(key: string, value: T, scope?: Scope): this;
+
+    setFactory<K extends keyof ComponentRegistry>(key: K, factory: () => ComponentRegistry[K], scope?: Scope): this;
+    setFactory<T>(key: string, factory: () => T, scope?: Scope): this;
+
     has(key: string): boolean;
+
     clear(): void;
-    setFactory<T>(key: string, factory: (() => T) | ((mockInstance?: any) => T), scope?: Scope): this;
 }
 
 export interface ContainerOptions {
@@ -18,10 +30,11 @@ export interface ContainerOptions {
 }
 
 export class Container implements IContainer {
+    private static asyncLocalStorage = new AsyncLocalStorage<Map<string, any>>();
+
     private dependencies: Map<string, any> = new Map();
     private instances: Map<string, any> = new Map();
-    private factories: Map<string, (() => any) | ((mockInstance?: any) => any)> = new Map();
-    private scopes: Map<string, Container> = new Map();
+    private factories: Map<string, () => any> = new Map();
     private scopeMap: Map<string, Scope> = new Map();
 
     private options: ContainerOptions;
@@ -36,18 +49,52 @@ export class Container implements IContainer {
     }
 
     /**
+     * Выполняет функцию в контексте запроса
+     */
+    runInRequestScope<T>(fn: () => T): T {
+        return Container.asyncLocalStorage.run(new Map(), fn);
+    }
+
+    /**
+     * Регистрирует фабрику зависимости
+     */
+    setFactory<K extends keyof ComponentRegistry>(key: K, factory: () => ComponentRegistry[K], scope?: Scope): this;
+    setFactory<T>(key: string, factory: () => T, scope?: Scope): this;
+    setFactory<T>(key: string, factory: () => T, scope: Scope = 'singleton'): this {
+        this.factories.set(key, factory);
+        this.scopeMap.set(key, scope);
+
+        if (scope === 'singleton' && this.options.cache) {
+            const instance = typeof factory === 'function'
+                ? (factory as () => T)()
+                : factory;
+
+            this.instances.set(key, instance);
+        }
+
+        return this;
+    }
+
+    /**
      * Регистрирует зависимость
      */
+    set<K extends keyof ComponentRegistry>(key: K, value: CompatibleWith<any, ComponentRegistry[K]>, scope?: Scope): this;
+    set<T>(key: string, value: T, scope?: Scope): this;
     set<T>(key: string, value: T, scope: Scope = 'singleton'): this {
         if (this.options.log) {
             console.log(`[Container] Registering: ${key}`);
         }
-        this.dependencies.set(key, value);
-        this.scopeMap.set(key, scope);
 
-        if (scope === 'singleton' && this.options.cache) {
-            this.instances.set(key, value);
+        if (scope === 'singleton') {
+            this.dependencies.set(key, value);
+            if (this.options.cache) {
+                this.instances.set(key, value);
+            }
+        } else {
+            this.factories.set(key, () => value);
         }
+
+        this.scopeMap.set(key, scope);
 
         return this;
     }
@@ -55,39 +102,51 @@ export class Container implements IContainer {
     /**
      * Получает зависимость
      */
-    get<T>(key: string, requestId?: string): T {
+    get<K extends keyof ComponentRegistry>(key: K): ComponentRegistry[K];
+    get<T>(key: string): T;
+    get<T>(key: string): T {
         const scope = this.scopeMap.get(key) || 'singleton';
 
-        // Для request scope без requestId - бросаем ошибку (для testable behavior)
-        if (scope === 'request' && !requestId) {
-            throw new Error('RequestId is required for Request-scoped dependency');
-        }
-
         switch (scope) {
-            case 'singleton':
-                return this.getSingleton<T>(key) as T;
+            case 'singleton': {
+                return this.getSingleton<T>(key);
+            }
+
             case 'request': {
-                if (this.dependencies.has(key)) {
-                    return this.dependencies.get(key) as T;
+                const cache = this.getRequestCache();
+                if (!cache) {
+                    throw new Error(
+                        'Request-scoped dependency accessed outside of request context. ' +
+                        'Use container.runInRequestScope() to create a request context.'
+                    );
                 }
 
-                // Для request scope берём factory из factories и вызываем лениво
+                if (cache.has(key)) {
+                    return cache.get(key);
+                }
+
                 const factory = this.factories.get(key);
-                if (!factory) throw new Error(`Dependency "${key}" not found`);
+                if (!factory) {
+                    throw new Error(`Dependency "${key}" not found`);
+                }
 
-                let instance: T;
-
-                // Factory принимает mockInstance как параметр - вызываем без него при request scope get()
-                // Для testable behavior factory должен быть вызван только один раз на requestId
-                instance = typeof factory === 'function' ? (factory as ((mockInstance?: any) => T))() : factory;
-
-                return instance as unknown as T;
+                const instance = factory();
+                cache.set(key, instance);
+                return instance;
             }
-            case 'transient':
-                // Для transient scope каждый get() возвращает новый экземпляр из зависимости
-                const dep2 = this.dependencies.get(key);
-                if (!dep2) throw new Error(`Dependency "${key}" not found`);
-                return dep2 as T;
+
+            case 'transient': {
+                const factory = this.factories.get(key);
+                if (!factory) {
+                    throw new Error(`Dependency "${key}" not found`);
+                }
+
+                return factory();
+            }
+
+            default: {
+                throw new Error(`Unknown scope: ${scope}`);
+            }
         }
     }
 
@@ -105,9 +164,19 @@ export class Container implements IContainer {
         }
 
         // Для singleton scope сразу вызываем фабрику и кэшируем результат
-        const instance = typeof factory === 'function' ? (factory as () => T)() : factory;
+        const instance = typeof factory === 'function'
+            ? (factory as () => T)()
+            : factory;
+
         this.instances.set(key, instance);
         return instance;
+    }
+
+    /**
+     * Получает кеш текущего запроса
+     */
+    private getRequestCache(): Map<string, any> | undefined {
+        return Container.asyncLocalStorage.getStore();
     }
 
     /**
@@ -117,8 +186,15 @@ export class Container implements IContainer {
         this.dependencies.clear();
         this.instances.clear();
         this.factories.clear();
-        this.scopes.clear();
         this.scopeMap.clear();
+    }
+
+    clearRequestScope(): void {
+        for (const [key, scope] of this.scopeMap) {
+            if (scope === 'request') {
+                this.dependencies.delete(key);
+            }
+        }
     }
 
     /**
@@ -154,37 +230,11 @@ export class Container implements IContainer {
     }
 
     /**
-     * Регистрирует фабрику зависимости
-     * Поддерживает два типа фабрик:
-     * - singleton: () => T (без параметров)
-     * - request: (mockInstance?: any) => T (принимает mock из контейнера для testable behavior)
-     */
-    setFactory<T>(key: string, factory: (() => T) | ((mockInstance?: any) => T), scope: Scope = 'singleton'): this {
-        this.factories.set(key, factory);
-        this.scopeMap.set(key, scope);
-
-        if (scope === 'singleton' && this.options.cache) {
-            const instance = typeof factory === 'function' ? (factory as () => T)() : factory;
-            this.instances.set(key, instance);
-        }
-
-        return this;
-    }
-
-    /**
      * Проверяет наличие зависимости
      */
     has(key: string): boolean {
-        return this.dependencies.has(key) || this.factories.has(key);
+        return this.dependencies.has(key) ||
+            this.factories.has(key) ||
+            this.instances.has(key);
     }
-
-    /**
-     * Альтернативный метод для установки singleton зависимости (для совместимости)
-     */
-    setSingleton<T>(key: string, value: T): void {
-        const factory = () => value;
-        this.setFactory(key, factory, 'singleton');
-    }
-
 }
-

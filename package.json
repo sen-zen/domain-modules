@@ -11,6 +11,31 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./di": {
+      "types": "./dist/di.d.mts",
+      "import": "./dist/di.mjs",
+      "require": "./dist/di.cjs"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.mts",
+      "import": "./dist/utils.mjs",
+      "require": "./dist/utils.cjs"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.mts",
+      "import": "./dist/errors.mjs",
+      "require": "./dist/errors.cjs"
+    },
+    "./decorators": {
+      "types": "./dist/decorators.d.mts",
+      "import": "./dist/decorators.mjs",
+      "require": "./dist/decorators.cjs"
+    },
+    "./container": {
+      "types": "./dist/container.d.mts",
+      "import": "./dist/container.mjs",
+      "require": "./dist/container.cjs"
+    },
     "./infrastructure": {
       "types": "./dist/infrastructure.d.mts",
       "import": "./dist/infrastructure.mjs",

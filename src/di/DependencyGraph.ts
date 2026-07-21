@@ -2,7 +2,6 @@ export interface GraphNode {
     name: string;
     dependencies: string[];
     nodeClass: any;
-    nodeDir: string;
 }
 
 /**
@@ -24,7 +23,6 @@ export class DependencyGraph {
         }
 
         this.nodes.set(name, node);
-
         return this;
     }
 
@@ -33,58 +31,72 @@ export class DependencyGraph {
         return this;
     }
 
-    /**
-     * Топологическая сортировка (DFS)
-     */
     sort(): GraphNode[] {
-        if (this.nodes.size === 0) {
+        const inDegree = new Map<string, number>();
+        const sorted: GraphNode[] = [];
+        const invalid: string[] = [];
+        const queue: string[] = [];
+
+        for (const [name, node] of this.nodes) {
+            const validDeps = [];
+            const deps = node.dependencies || [];
+
+            for (const dep of deps) {
+                if (this.nodes.has(dep)) {
+                    validDeps.push(dep);
+                } else {
+                    invalid.push(dep);
+                }
+            }
+
+            inDegree.set(name, validDeps.length);
+        }
+
+        if (invalid.length) {
+            console.warn('[DependencyGraph] Invalid dependencies detected:', invalid);
             return [];
         }
 
-        const visited = new Set<string>();
-        const visiting = new Set<string>();
-        const result: GraphNode[] = [];
-        const allNames = Array.from(this.nodes.keys());
+        const sortedNames = Array.from(inDegree.entries())
+            .filter(([_, degree]) => degree === 0)
+            .map(([name]) => name)
+            .sort((a, b) => a.localeCompare(b));
 
-        const visit = (name: string): void => {
-            if (visiting.has(name)) {
-                const cycle = Array.from(visiting).join(' → ') + ` → ${name}`;
-                throw new Error(`Circular dependency detected: ${cycle}`);
+        queue.push(...sortedNames);
+
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            const node = this.nodes.get(current);
+
+            if (!node) {
+                continue;
             }
 
-            if (visited.has(name)) {
-                return;
-            }
+            sorted.push(node);
 
-            visiting.add(name);
+            const dependents: string[] = [];
+            for (const [name, otherNode] of this.nodes) {
+                const deps = otherNode.dependencies || [];
+                if (deps.includes(current)) {
+                    const newDegree = (inDegree.get(name) || 0) - 1;
+                    inDegree.set(name, newDegree);
 
-            const node = this.nodes.get(name);
-
-            if (node) {
-                for (const dep of node.dependencies) {
-                    if (this.nodes.has(dep)) {
-                        visit(dep);
-                    } else {
-                        console.warn(`[Graph] Warning: "${name}" depends on "${dep}" which is not registered`);
+                    if (newDegree === 0) {
+                        dependents.push(name);
                     }
                 }
             }
 
-            visiting.delete(name);
-            visited.add(name);
-
-            if (node) {
-                result.push(node);
-            }
+            dependents.sort((a, b) => a.localeCompare(b));
+            queue.push(...dependents);
         }
 
-        for (const name of allNames) {
-            if (!visited.has(name)) {
-                visit(name);
-            }
+        if (sorted.length !== this.nodes.size) {
+            const missing = Array.from(this.nodes.keys()).filter(name => !sorted.some(n => n.name === name));
+            console.warn('[DependencyGraph] Circular dependency detected:', missing);
         }
 
-        return result;
+        return sorted;
     }
 
     /**
