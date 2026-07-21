@@ -10,8 +10,8 @@ export interface ModuleConfig extends ComponentConfig {
     /** Версия модуля */
     version?: string;
 
-    /** UseCase'ы модуля */
-    components?: (Type<any> | { class: Type<any>; scope?: Scope })[];
+    /** Component'ы модуля */
+    components?: (string | Type<any> | { class: Type<any>; scope?: Scope })[];
 
     /** Включен ли модуль */
     enabled?: boolean;
@@ -48,7 +48,7 @@ export const ModuleMetadata = {
         if (!target || typeof target !== 'function') {
             return false;
         }
-        return Object.hasOwn(target, MODULE_CONFIG_KEY) && target.__moduleConfig !== undefined;
+        return Object.hasOwn(target, MODULE_CONFIG_KEY) && target[MODULE_CONFIG_KEY] !== undefined;
     },
 
     _getValue<K extends keyof ModuleConfig>(target: any, key: K) {

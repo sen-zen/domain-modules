@@ -12,6 +12,7 @@ export async function createTestModuleFile(
         export class ${name} {
             static ${MODULE_CONFIG_KEY} = {
                 name: '${name}',
+                components: ${JSON.stringify(config.components || [])},
                 dependencies: ${JSON.stringify(config.dependencies || [])},
                 enabled: ${config.enabled !== false},
                 version: '${config.version || '1.0.0'}',
@@ -24,11 +25,22 @@ export async function createTestModuleFile(
     return filePath;
 }
 
+interface IComponentConfig extends Omit<ComponentConfig, 'name'> {
+    methods?: Record<string, string>
+}
+
 export async function createTestComponentFile(
     dir: string,
     name: string,
-    config: Omit<ComponentConfig, 'name'> = {}
+    config: IComponentConfig = {}
 ): Promise<string> {
+    const methodsCode = Object.entries(config.methods || {})
+        .map(([methodName, methodBody]) => {
+            return `${methodName}() { ${methodBody} }`;
+        })
+        .join('\n');
+
+
     const filePath = `${dir}/${name}.js`;
     const content = `
         export class ${name} {
@@ -37,6 +49,8 @@ export async function createTestComponentFile(
                 scope: ${JSON.stringify(config.scope || "request")},
                 dependencies: ${JSON.stringify(config.dependencies || [])},
             };
+
+            ${methodsCode}
         }
     `;
     await writeFile(filePath, content);

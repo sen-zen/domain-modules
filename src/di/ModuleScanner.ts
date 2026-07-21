@@ -70,7 +70,7 @@ export class ModuleScanner {
         }
 
         try {
-            const moduleFiles = await this.findFiles(directory, this.options.pattern, 0);
+            const moduleFiles = await this.findFiles(directory, this.options.pattern, 1);
 
             if (this.options.log) {
                 console.info(`Found ${moduleFiles.length} module files`);
@@ -117,20 +117,30 @@ export class ModuleScanner {
                 this.registerModule(node.nodeClass);
             }
 
-            for (const dir of componentDirs) {
-                if (!this.scannedDirs.has(dir)) {
-                    if (this.options.log) {
-                        console.info(`[ModuleScanner] Scanning components in: ${dir}`);
-                    }
+            const componentGraph = new DependencyGraph();
 
-                    await this.scanComponents(dir);
+            const componentFiles = await this.findFiles(
+                [...componentDirs].filter(dir => !this.scannedDirs.has(dir)),
+                /\.(t|j)sx?$/, 5
+            );
 
-                    this.scannedDirs.add(dir);
-                }
-            };
+            const components = await this.load(componentFiles, ComponentMetadata.isComponent);
+
+            components.forEach(({ module }) => {
+                componentGraph.addNode({
+                    nodeClass: module,
+                    name: ComponentMetadata.getName(module),
+                    dependencies: ComponentMetadata.getDependencies(module)
+                });
+            });
 
             if (this.options.log) {
-                console.warn(`[ModuleScanner] Found ${this.modules.size} modules, ${this.failed.length} failed`);
+                console.warn(`[ModuleScanner] Found ${components.length} components`);
+            }
+
+            const sortedComponent = componentGraph.sort();
+            for (const node of sortedComponent) {
+                this.registerComponent(node.nodeClass);
             }
 
             return this;
@@ -141,68 +151,19 @@ export class ModuleScanner {
     }
 
     /**
-     * Сканирует директорию на предмет файлов, содержащих компоненты (@Component)
-     * и регистрирует их в контейнере.
-     */
-    async scanComponents(directory: string): Promise<ModuleScanner> {
-        const graph = new DependencyGraph();
-        const componentFiles = await this.findFiles(directory, /\.(t|j)sx?$/, 5);
-        const components = await this.load(componentFiles, ComponentMetadata.isComponent);
-
-        if (components.length === 0) {
-            if (this.options.log) {
-                console.info(`[ModuleScanner] No components found in ${directory}`);
-            }
-            return this;
-        }
-
-        components.forEach(({ module }) => {
-            graph.addNode({
-                nodeClass: module,
-                name: ComponentMetadata.getName(module),
-                dependencies: ComponentMetadata.getDependencies(module)
-            });
-        });
-
-        const sortedComponents = graph.sort();
-
-        for (const node of sortedComponents) {
-            const component = node.nodeClass;
-            const name = ComponentMetadata.getName(component);
-
-            if (!this.container.has(name)) {
-                const scope = ComponentMetadata.getScope(component);
-                const dependencies = ComponentMetadata.getDependencies(component);
-
-                this.container.registerComponent({
-                    class: component,
-                    scope: scope,
-                    dependencies: dependencies,
-                });
-
-                if (this.options.log) {
-                    console.info(`[ModuleScanner] Registered component: ${name}`);
-                }
-            } else if (this.options.log) {
-                console.warn(`[ModuleScanner] Component "${name}" already registered, skipping`);
-            }
-        }
-
-        return this;
-    }
-
-    /**
      * Находит все JS файлы (рекурсивно)
      */
     private async findFiles(
-        dir: string,
+        dir: string | string[],
         pattern: RegExp,
         maxDepth: number = -1
     ): Promise<string[]> {
         const fs = await import('node:fs/promises');
         const path = await import('node:path');
         const files: string[] = [];
-        const directories: { dir: string; depth: number }[] = [{ dir, depth: 0 }];
+        const directories: { dir: string; depth: number }[] = Array.isArray(dir)
+            ? dir.map((direcotory: string) => ({ dir: direcotory, depth: 0 }))
+            : [{ dir, depth: 0 }];
 
         while (directories.length) {
             const current = directories.shift()!;
@@ -295,6 +256,54 @@ export class ModuleScanner {
         } catch (error) {
             this.failed.push(moduleName);
             console.warn(`[ModuleScanner] Failed to register module "${moduleName}":`, error);
+        }
+    }
+
+
+    /**
+     * Регистрирует компоненты
+     */
+    registerComponent(componentClass: any) {
+        if (!this.container) {
+            return;
+        }
+
+        if (!ComponentMetadata.isComponent(componentClass)) {
+            if (this.options.log) {
+                console.warn(`[ModuleScanner] Module is not Metadat`);
+            }
+            return;
+        }
+
+        const componentName = ComponentMetadata.getName(componentClass);
+        if (!componentName) {
+            return;
+        }
+
+        if (this.container.has(componentName)) {
+            if (this.options.log) {
+                console.warn(`[ModuleScanner] Component "${componentName}" already registered, skipping`);
+            }
+            return;
+        }
+
+
+        try {
+            const scope = ComponentMetadata.getScope(componentClass);
+            const dependencies = ComponentMetadata.getDependencies(componentClass);
+
+            this.container.registerComponent({
+                class: componentClass,
+                scope: scope,
+                dependencies: dependencies,
+            });
+
+            if (this.options.log) {
+                console.info(`[ModuleScanner] Registered component: ${componentName}`);
+            }
+        } catch (error) {
+            this.failed.push(componentName);
+            console.warn(`[ModuleScanner] Failed to register component "${componentName}":`, error);
         }
     }
 

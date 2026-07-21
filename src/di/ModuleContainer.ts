@@ -181,6 +181,10 @@ export class ModuleContainer {
         return this.container.get<T>(name);
     }
 
+    runInRequestScope<T>(fn: () => T): T {
+        return this.container.runInRequestScope(fn);
+    }
+
     /**
      * Проверяет, зарегистрирован ли модуль
      */
