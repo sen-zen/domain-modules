@@ -2,7 +2,7 @@ import { Result } from '@/utils/result';
 import { UseCase } from '@core/application';
 import { RefreshTokenError } from '@/errors';
 
-import { AuthComponent } from '../../decorator';
+import { AuthComponent } from '@auth/decorator';
 import { RefreshTokenCommand, ValidateSessionCommand } from '../commands';
 
 import type { ITokenService } from '@auth/domain/services/ITokenService';
@@ -21,6 +21,7 @@ export type ValidateSessionUseCaseResponse =
     {
         isAuthenticated: false;
         state: Exclude<SessionValidationState, 'AUTHENTICATED' | 'REFRESHED'>;
+        userId?: string;
     } | {
         isAuthenticated: true;
         state: "AUTHENTICATED";

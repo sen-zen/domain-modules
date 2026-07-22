@@ -5,7 +5,7 @@ import { RefreshTokenCommand } from '@auth/application/commands/RefreshTokenComm
 import { RefreshTokenError } from '@/errors';
 import { Result } from '@/utils/result';
 import { UseCase } from '@core/application';
-import { AuthComponent } from '../../decorator';
+import { AuthComponent } from '@auth/decorator';
 
 export type RefreshTokenResponse = {
     accessToken: string;

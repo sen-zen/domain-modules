@@ -1,6 +1,6 @@
 import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
 import { UserId } from '@user/domain/value-objects/UserId';
-import { AuthComponent } from '../../decorator';
+import { AuthComponent } from '@auth/decorator';
 
 @AuthComponent({
     dependencies: ['RefreshTokenRepository']

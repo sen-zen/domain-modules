@@ -1,6 +1,7 @@
 import { Result } from '@/utils/result';
 import { NotFoundError } from '@/errors';
 import { UseCase } from '@core/application';
+import { UserComponent } from '@user/decorator';
 import { UserId } from '@user/domain/value-objects/UserId';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
 import type { IUserRepository } from '@user/domain/repositories/IUserRepository';
@@ -15,13 +16,17 @@ export type GetCurrentUserResponse = {
     } | null;
 };
 
+@UserComponent({
+    dependencies: [
+        'TokenService',
+        'UserRepository'
+    ]
+})
 export class GetCurrentUserUseCase extends UseCase<string | undefined, GetCurrentUserResponse> {
     constructor(
         private readonly tokenService: ITokenService,
         private readonly userRepository: IUserRepository
-    ) {
-        super();
-    }
+    ) { super() }
 
     async execute(accessToken?: string): Promise<Result<GetCurrentUserResponse>> {
         if (!accessToken) {

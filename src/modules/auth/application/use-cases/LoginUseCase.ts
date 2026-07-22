@@ -1,17 +1,16 @@
 import { UseCase } from '@core/application/UseCase';
 import { LoginCommand } from '@auth/application/commands/LoginCommand';
+import { AuthComponent } from '@auth/decorator';
 
 import { Email } from '@core/domain/value-objects/Email';
 import { Password } from '@core/domain/value-objects/Password';
 import { RefreshToken } from '@auth/domain/entities/RefreshToken';
 import { NotFoundError, UnauthorizedError } from '@/errors';
-import { Component } from '@/decorators/Component';
 
 import type { Result } from '@/utils/result';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
 import type { IUserRepository } from '@user/domain/repositories/IUserRepository';
 import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
-import { AuthComponent } from '../../decorator';
 
 type UserLoginResponse = {
     id: string;
