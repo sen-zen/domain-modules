@@ -51,7 +51,8 @@
     "dev": "tsdown --watch",
     "build": "pnpm run clean && tsdown",
     "clean": "rm -rf dist",
-    "test": "vitest"
+    "test": "vitest --run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",

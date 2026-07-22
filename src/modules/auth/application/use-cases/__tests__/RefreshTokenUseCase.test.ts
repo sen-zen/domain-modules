@@ -3,8 +3,6 @@ import { RefreshTokenCommand } from '@auth/application/commands/RefreshTokenComm
 import { RefreshToken } from '@auth/domain/entities/RefreshToken';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
 import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
-import { Result } from '@/utils/result';
-import { vi, describe, it, beforeEach, expect, beforeAll } from 'vitest';
 
 describe('RefreshTokenUseCase', () => {
     let useCase: RefreshTokenUseCase;

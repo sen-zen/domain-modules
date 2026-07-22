@@ -10,6 +10,7 @@
       "node",
       "vitest/globals",
     ],
+    "experimentalDecorators": true,
   },
   "include": [
     "src"

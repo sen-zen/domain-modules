@@ -223,7 +223,7 @@ export class ModuleContainer {
             this.container.setFactory(
                 componentName,
                 () => {
-                    const resolvedDeps = componentDependencies.map(n => this.container.get(n));
+                    const resolvedDeps = componentDependencies.map((dep: string) => this.container.get(dep));
                     return new component(...resolvedDeps);
                 },
                 componentScope

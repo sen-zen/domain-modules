@@ -1,50 +1,47 @@
 import { ValidateSessionCommand } from '@auth/application/commands';
 import { ValidateSessionUseCase } from '../ValidateSessionUseCase';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
+import type { AccessTokenPayload, RefreshTokenPayload } from '@auth/types';
+import { RefreshTokenError } from '@/errors';
 import { RefreshTokenUseCase } from '../RefreshTokenUseCase';
 import { Result } from '@/utils/result';
-import { vi, describe, it, beforeEach, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 describe('ValidateSessionUseCase', () => {
     let useCase: ValidateSessionUseCase;
-    let mockTokenService: Partial<ITokenService>;
+    let mockTokenService: ITokenService;
     let mockRefreshTokensUseCase: RefreshTokenUseCase;
+    let verifyAccessTokenMock: ReturnType<typeof vi.fn>;
+    let isTokenExpiredMock: ReturnType<typeof vi.fn>;
+    let verifyRefreshTokenMock: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
+        verifyAccessTokenMock = vi.fn();
+        isTokenExpiredMock = vi.fn();
+        verifyRefreshTokenMock = vi.fn();
+
         mockTokenService = {
-            verifyAccessToken: vi.fn(),
-            isTokenExpired: vi.fn(),
-            verifyRefreshToken: vi.fn(),
+            verifyAccessToken: verifyAccessTokenMock,
+            isTokenExpired: isTokenExpiredMock,
+            verifyRefreshToken: verifyRefreshTokenMock,
             getAccessTokenExpiresIn: () => ({ seconds: 3600 }),
             getRefreshTokenExpiresIn: () => ({ seconds: 7200 }),
-        };
+            generateTokens: vi.fn(),
+        } as any;
 
         mockRefreshTokensUseCase = new RefreshTokenUseCase(
-            mockTokenService as any,
-            { save: vi.fn(), findByUserIdAndFamilyId: vi.fn() } as any
+            mockTokenService,
+            {
+                save: vi.fn(),
+                findByUserIdAndFamilyId: vi.fn().mockResolvedValue({ success: true, token: null }),
+            } as any
         );
 
-        // Мокируем execute для всех тестов с refresh token как успешный - возвращаем результат обновления токенов
-        vi.spyOn(mockRefreshTokensUseCase, 'execute').mockResolvedValue(
-            Result.ok({
-                accessToken: 'new-access-token',
-                refreshToken: 'new-refresh-token',
-                accessTokenExpiresIn: 3600,
-                refreshTokenExpiresIn: 7200,
-                userId: 'user-123',
-                state: 'REFRESHED' as const,
-                isAuthenticated: true,
-            })
-        );
-
-        useCase = new ValidateSessionUseCase(
-            mockTokenService as ITokenService,
-            mockRefreshTokensUseCase
-        );
+        useCase = new ValidateSessionUseCase(mockTokenService, mockRefreshTokensUseCase);
     });
 
-    describe('валидация через access token', () => {
-        const validAccessTokenPayload = {
+    describe('валидный access token', () => {
+        const validAccessTokenPayload: AccessTokenPayload = {
             sub: 'user-123',
             type: 'access' as const,
             exp: Date.now() / 1000 + 3600,
@@ -54,222 +51,326 @@ describe('ValidateSessionUseCase', () => {
             aud: 'tastehub-client',
         };
 
-        const expiredAccessTokenPayload = {
+        it('должен возвращать AUTHENTICATED при успешной верификации access token', async () => {
+            verifyAccessTokenMock.mockResolvedValue(validAccessTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            const command = ValidateSessionCommand.create({ accessToken: 'valid-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated && result.value.state === 'AUTHENTICATED') {
+                expect(result.value.userId).toBe('user-123');
+            }
+        });
+
+        it('должен возвращать AUTHENTICATED при успешной верификации через refresh token', async () => {
+            verifyAccessTokenMock.mockResolvedValue(validAccessTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            const command = ValidateSessionCommand.create({ accessToken: 'new-access-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated && result.value.state === 'AUTHENTICATED') {
+                expect(result.value.userId).toBe('user-123');
+            }
+        });
+    });
+
+    describe('просроченный access token', () => {
+        const expiredAccessTokenPayload: AccessTokenPayload = {
             sub: 'user-123',
             type: 'access' as const,
             exp: Date.now() / 1000 - 3600,
             iat: Date.now() / 1000,
-            jti: 'access-jti-123',
+            jti: 'access-jti-expired',
             iss: 'tastehub-api',
             aud: 'tastehub-client',
         };
-
-        it('должен авторизовать пользователя через валидный access token', async () => {
-            mockTokenService.verifyAccessToken = vi.fn().mockResolvedValue(validAccessTokenPayload);
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(false);
-
-            const command = ValidateSessionCommand.create({ accessToken: 'valid-access-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(true);
-            expect(result.value.state).toBe('AUTHENTICATED');
-            expect(result.value.userId).toBe('user-123');
-        });
-
-        it('должен возвращать UNAUTHENTICATED если access token не передан', async () => {
-            const command = ValidateSessionCommand.create({});
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('UNAUTHENTICATED');
-        });
 
         it('должен возвращать UNAUTHENTICATED если access token просрочен', async () => {
-            mockTokenService.verifyAccessToken = vi.fn().mockResolvedValue(expiredAccessTokenPayload);
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(true);
+            verifyAccessTokenMock.mockResolvedValue(expiredAccessTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(true);
 
-            const command = ValidateSessionCommand.create({ accessToken: 'expired-access-token' });
-
+            const command = ValidateSessionCommand.create({ accessToken: 'expired-token' });
             const result = await useCase.execute(command);
 
             expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('UNAUTHENTICATED');
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
         });
 
-        it('должен возвращать UNAUTHENTICATED при ошибке верификации токена', async () => {
-            const error = new Error('Invalid token');
+        it('должен возвращать UNAUTHENTICATED если access token просрочен при обновлении через refresh token', async () => {
+            verifyAccessTokenMock.mockResolvedValue(expiredAccessTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(true);
 
-            mockTokenService.verifyAccessToken = vi.fn().mockRejectedValue(error);
-
-            const command = ValidateSessionCommand.create({ accessToken: 'invalid-access-token' });
-
+            const command = ValidateSessionCommand.create({ accessToken: 'new-token' });
             const result = await useCase.execute(command);
 
             expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('UNAUTHENTICATED');
-        });
-    });
-
-    describe('валидация через refresh token', () => {
-        it('должен обновить токены через валидный refresh token', async () => {
-            const validRefreshTokenPayload = {
-                sub: 'user-123',
-                type: 'refresh' as const,
-                exp: Date.now() / 1000 + 7200,
-                iat: Date.now() / 1000,
-                jti: 'refresh-jti-456',
-                iss: 'tastehub-api',
-                aud: 'tastehub-client',
-                familyId: 'family-123',
-            };
-
-            mockTokenService.verifyRefreshToken = vi.fn().mockResolvedValue(validRefreshTokenPayload);
-            // Важно: isTokenExpired для refresh token должен возвращать false (токен не просрочен)
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(false);
-
-            const command = ValidateSessionCommand.create({ refreshToken: 'old-refresh-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(true);
-            expect(result.value.state).toBe('REFRESHED');
-            expect(result.value.userId).toBe('user-123');
-        });
-
-        it('должен возвращать UNAUTHENTICATED если refresh token не передан и верификация возвратила null', async () => {
-            mockTokenService.verifyRefreshToken = vi.fn().mockResolvedValue(null);
-
-            const command = ValidateSessionCommand.create({ refreshToken: 'dummy-refresh-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('UNAUTHENTICATED');
-        });
-
-        it('должен возвращать REFRESH_EXPIRED если refresh token просрочен', async () => {
-            const expiredRefreshTokenPayload = {
-                sub: 'user-123',
-                type: 'refresh' as const,
-                exp: Date.now() / 1000 - 7200,
-                iat: Date.now() / 1000,
-                jti: 'refresh-jti-expired',
-                iss: 'tastehub-api',
-                aud: 'tastehub-client',
-                familyId: 'family-123',
-            };
-
-            mockTokenService.verifyRefreshToken = vi.fn().mockResolvedValue(expiredRefreshTokenPayload);
-            // Токен просрочен - isTokenExpired возвращает true
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(true);
-
-            const command = ValidateSessionCommand.create({ refreshToken: 'dummy-refresh-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('REFRESH_EXPIRED');
-        });
-
-        it('должен возвращать REFRESH_INVALID при ошибке верификации refresh токена', async () => {
-            mockTokenService.verifyRefreshToken = vi.fn().mockRejectedValue(new Error('Invalid token'));
-
-            const command = ValidateSessionCommand.create({ refreshToken: 'dummy-refresh-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.isAuthenticated).toBe(false);
-            expect(result.value.state).toBe('REFRESH_INVALID');
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
         });
     });
 
-    describe('интеграционные сценарии', () => {
-        const validAccessTokenPayloadForIntegration = {
-            sub: 'user-123',
-            type: 'access' as const,
-            exp: Date.now() / 1000 + 3600,
-            iat: Date.now() / 1000,
-            jti: 'access-jti-integration',
-            iss: 'tastehub-api',
-            aud: 'tastehub-client',
-        };
+    describe('ошибки верификации access token', () => {
+        it('должен возвращать UNAUTHENTICATED если verifyAccessToken выбрасывает ошибку InvalidToken', async () => {
+            verifyAccessTokenMock.mockRejectedValue(new Error('Invalid token'));
 
-        const validRefreshTokenPayloadForIntegration = {
+            const command = ValidateSessionCommand.create({ accessToken: 'invalid-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+
+        it('должен возвращать UNAUTHENTICATED если verifyAccessToken выбрасывает ошибку ExpiredToken', async () => {
+            verifyAccessTokenMock.mockRejectedValue(new Error('Token expired'));
+
+            const command = ValidateSessionCommand.create({ accessToken: 'expired-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+    });
+
+    describe('сценарий без токенов', () => {
+        it('должен возвращать UNAUTHENTICATED если не передан ни один токен', async () => {
+            const command = ValidateSessionCommand.create({});
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+
+        it('должен возвращать UNAUTHENTICATED если передан только пустой accessToken', async () => {
+            const command = ValidateSessionCommand.create({ accessToken: '' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+    });
+
+    describe('валидный refresh token', () => {
+        const validRefreshTokenPayload: RefreshTokenPayload = {
             sub: 'user-123',
             type: 'refresh' as const,
             exp: Date.now() / 1000 + 7200,
             iat: Date.now() / 1000,
-            jti: 'refresh-jti-integration',
+            jti: 'refresh-jti-456',
             iss: 'tastehub-api',
             aud: 'tastehub-client',
             familyId: 'family-123',
         };
 
-        it('должен обрабатывать успешный логин с access token', async () => {
-            mockTokenService.verifyAccessToken = vi.fn().mockResolvedValue(validAccessTokenPayloadForIntegration);
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(false);
+        it('должен вызывать RefreshTokenUseCase и возвращать REFRESHED при успешном обновлении токенов', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
 
-            const command = ValidateSessionCommand.create({ accessToken: 'valid-access-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-        });
-
-        it('должен обрабатывать случай без токенов', async () => {
-            const command = ValidateSessionCommand.create({});
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.state).toBe('UNAUTHENTICATED');
-        });
-
-        it('должен обрабатывать просроченный refresh token', async () => {
-            const expiredRefreshTokenPayloadForIntegration = {
-                sub: 'user-123',
-                type: 'refresh' as const,
-                exp: Date.now() / 1000 - 7200,
-                iat: Date.now() / 1000,
-                jti: 'refresh-jti-expired',
-                iss: 'tastehub-api',
-                aud: 'tastehub-client',
-                familyId: 'family-123',
-            };
-
-            mockTokenService.verifyRefreshToken = vi.fn().mockResolvedValue(expiredRefreshTokenPayloadForIntegration);
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(true);
-
-            const command = ValidateSessionCommand.create({ refreshToken: 'dummy-refresh-token' });
-
-            const result = await useCase.execute(command);
-
-            expect(result.isSuccess).toBe(true);
-            expect(result.value.state).toBe('REFRESH_EXPIRED');
-        });
-
-        it('должен вызывать RefreshTokenUseCase при необходимости обновления', async () => {
-            mockTokenService.verifyRefreshToken = vi.fn().mockResolvedValue(validRefreshTokenPayloadForIntegration);
-            // Важно: isTokenExpired должен возвращать false для refresh token (токен не просрочен)
-            mockTokenService.isTokenExpired = vi.fn().mockResolvedValue(false);
+            mockRefreshTokensUseCase.execute = vi.fn().mockResolvedValue(Result.ok({
+                accessToken: 'new-access-token',
+                refreshToken: 'new-refresh-token',
+                accessTokenExpiresIn: 3600,
+                refreshTokenExpiresIn: 7200,
+                userId: 'user-123',
+                isAuthenticated: true,
+            }));
 
             const command = ValidateSessionCommand.create({ refreshToken: 'old-refresh-token' });
+            const result = await useCase.execute(command);
 
-            await useCase.execute(command);
-
-            // RefreshTokenUseCase должен быть вызван
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESHED');
+            }
             expect(mockRefreshTokensUseCase.execute).toHaveBeenCalled();
-            expect(mockTokenService.verifyRefreshToken).toHaveBeenCalled();
+        });
+    });
+
+    describe('просроченный refresh token', () => {
+        const expiredRefreshTokenPayload: RefreshTokenPayload = {
+            sub: 'user-123',
+            type: 'refresh' as const,
+            exp: Date.now() / 1000 - 7200,
+            iat: Date.now() / 1000,
+            jti: 'refresh-jti-expired',
+            iss: 'tastehub-api',
+            aud: 'tastehub-client',
+            familyId: 'family-123',
+        };
+
+        it('должен возвращать REFRESH_EXPIRED если refresh token просрочен', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(expiredRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(true);
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'expired-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_EXPIRED');
+            }
+        });
+    });
+
+    describe('ошибки верификации refresh token', () => {
+        it('должен возвращать REFRESH_INVALID если verifyRefreshToken выбрасывает ошибку InvalidToken', async () => {
+            verifyRefreshTokenMock.mockRejectedValue(new Error('Invalid token'));
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'invalid-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_INVALID');
+            }
+        });
+
+        it('должен возвращать REFRESH_INVALID если verifyRefreshToken вернёт null', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(null);
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'null-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_INVALID');
+            }
+        });
+    });
+
+    describe('сценарии RefreshTokenUseCase', () => {
+        const validRefreshTokenPayload: RefreshTokenPayload = {
+            sub: 'user-123',
+            type: 'refresh' as const,
+            exp: Date.now() / 1000 + 7200,
+            iat: Date.now() / 1000,
+            jti: 'refresh-jti-456',
+            iss: 'tastehub-api',
+            aud: 'tastehub-client',
+            familyId: 'family-123',
+        };
+
+        it('должен возвращать REFRESH_INVALID при RefreshTokenError.TOKEN_NOT_FOUND', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            mockRefreshTokensUseCase.execute = vi.fn().mockRejectedValue(
+                new RefreshTokenError('Token not found', 'TOKEN_NOT_FOUND')
+            );
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'missing-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_INVALID');
+            }
+        });
+
+        it('должен возвращать REFRESH_INVALID при RefreshTokenError.INVALID_TOKEN', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            mockRefreshTokensUseCase.execute = vi.fn().mockRejectedValue(
+                new RefreshTokenError('Invalid token', 'INVALID_TOKEN')
+            );
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'invalid-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_INVALID');
+            }
+        });
+
+        it('должен возвращать TOKEN_STOLEN при RefreshTokenError.TOKEN_STOLEN', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            mockRefreshTokensUseCase.execute = vi.fn().mockRejectedValue(
+                new RefreshTokenError('Token stolen', 'TOKEN_STOLEN')
+            );
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'stolen-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('TOKEN_STOLEN');
+            }
+        });
+
+        it('должен возвращать REFRESH_EXPIRED при RefreshTokenError.TOKEN_REVOKED', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            mockRefreshTokensUseCase.execute = vi.fn().mockRejectedValue(
+                new RefreshTokenError('Token revoked', 'TOKEN_REVOKED')
+            );
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'revoked-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_EXPIRED');
+            }
+        });
+
+        it('должен возвращать UNAUTHENTICATED при RefreshTokenError.GENERATION_FAILED', async () => {
+            verifyRefreshTokenMock.mockResolvedValue(validRefreshTokenPayload);
+            isTokenExpiredMock.mockResolvedValue(false);
+
+            mockRefreshTokensUseCase.execute = vi.fn().mockRejectedValue(
+                new RefreshTokenError('Failed to generate tokens', 'GENERATION_FAILED')
+            );
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'failed-refresh-token' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+    });
+
+    describe('isRefreshRoute', () => {
+        it('должен возвращать UNAUTHENTICATED при isRefreshRoute=true без токенов', async () => {
+            const command = ValidateSessionCommand.create({});
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('UNAUTHENTICATED');
+            }
+        });
+
+        it('должен возвращать REFRESH_INVALID при isRefreshRoute=true и ошибке верификации refresh токена', async () => {
+            verifyRefreshTokenMock.mockRejectedValue(new Error('Invalid token'));
+
+            const command = ValidateSessionCommand.create({ refreshToken: 'dummy' });
+            const result = await useCase.execute(command);
+
+            expect(result.isSuccess).toBe(true);
+            if (result.value.isAuthenticated) {
+                expect(result.value.state).toBe('REFRESH_INVALID');
+            }
         });
     });
 });

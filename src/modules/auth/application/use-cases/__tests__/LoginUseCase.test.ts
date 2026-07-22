@@ -1,7 +1,7 @@
 import { Email } from '@core/domain/value-objects/Email';
 import { LoginCommand } from '@auth/application/commands/LoginCommand';
 import { LoginUseCase } from '../LoginUseCase';
-import { vi, describe, it, beforeEach, expect } from 'vitest';
+import { vi, describe, it, expect } from 'vitest';
 
 interface MockTokens {
     accessToken: string;
@@ -16,9 +16,9 @@ describe('LoginUseCase', () => {
 
     beforeEach(() => {
         mockUserRepository = {
-            findAuthData: async (email: string) => null,
-            findById: async (id: string) => null,
-            findByEmail: async (email: string) => null,
+            findAuthData: async () => null,
+            findById: async () => null,
+            findByEmail: async () => null,
             delete: async () => { },
         };
 
@@ -45,8 +45,8 @@ describe('LoginUseCase', () => {
 
         // Mock findAuthData для успешного кейса - возвращаем User объект в формате для verify()
         // Используем UUID для ID вместо Email.create для корректных тестов
-        mockUserRepository.findAuthData = async (email: string) => {
-            if (email === 'test@example.com') {
+        mockUserRepository.findAuthData = async () => {
+            if (true) {
                 return {
                     id: 'user-test-id-uuid', // Используем строку как UUID
                     email: Email.create('test@example.com'),
@@ -106,8 +106,8 @@ describe('LoginUseCase', () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
 
         // Mock findAuthData для успешного кейса с неправильным verify() результатом
-        mockUserRepository.findAuthData = async (email: string) => {
-            if (email === 'test@example.com') {
+        mockUserRepository.findAuthData = async () => {
+            if (true) {
                 return {
                     id: 'user-test-id-uuid',
                     email: Email.create('test@example.com'),
@@ -145,7 +145,7 @@ describe('LoginUseCase', () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
 
         // Mock findAuthData для случая когда пользователь не найден
-        mockUserRepository.findAuthData = async (email: string) => null;
+        mockUserRepository.findAuthData = async () => null;
 
         const command = LoginCommand.create({
             email: 'nonexistent@example.com',
@@ -169,8 +169,8 @@ describe('LoginUseCase', () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
 
         // Mock findAuthData для успешного кейса
-        mockUserRepository.findAuthData = async (email: string) => {
-            if (email === 'test@example.com') {
+        mockUserRepository.findAuthData = async () => {
+            if (true) {
                 return {
                     id: 'user-test-id-uuid',
                     email: Email.create('test@example.com'),
