@@ -70,10 +70,10 @@ export const ComponentMetadata = {
     },
 
     getName(target: any) {
-        if (target && typeof target === 'object' && target.type) {
-            return target.name || 'Unknown';
-        }
-        return this._getValue(target, 'name') ?? 'Unknown';
+        return this._getValue(target, 'name')
+            ?? target?.name
+            ?? target?.constructor?.name
+            ?? 'Unknown';
     },
 
     getScope(target: any) {

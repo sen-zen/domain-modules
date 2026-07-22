@@ -112,6 +112,32 @@ export class ModuleContainer {
             if (!moduleRegistry.has(name)) {
                 moduleRegistry.set(name, moduleClass);
             }
+
+            if (!moduleComponentsRegistry.has(name)) {
+                moduleComponentsRegistry.set(name, new Set());
+            }
+
+            const components = ModuleMetadata.getComponents(moduleClass);
+            for (const component of components) {
+                let componentName;
+                let componentClass;
+
+                if (typeof component === 'string') {
+                    componentName = component
+                } else if (typeof component === "object" && Object.hasOwn(component, 'class')) {
+                    componentClass = component.class;
+                    componentName = ComponentMetadata.getName(component.class);
+                } else if (typeof component === 'function' && ComponentMetadata.isComponent(component)) {
+                    componentClass = component;
+                    componentName = ComponentMetadata.getName(component);
+                }
+
+                moduleComponentsRegistry.get(name)!.add(componentName);
+
+                if (ComponentMetadata.isComponent(componentClass) && !componentRegistry.has(componentName)) {
+                    componentRegistry.set(componentName, componentClass);
+                }
+            }
         } catch (error) {
             console.warn(`[ModuleContainer] Failed to read module, skipping module registration...`, error);
         }
@@ -145,6 +171,10 @@ export class ModuleContainer {
             }
 
             for (const name of names) {
+                if (!componentRegistry.has(name)) {
+                    console.warn(`[ModuleContainer] Component "${name}" from module "${moduleName}" not found in registry, skipping...`);
+                    continue;
+                }
                 componentNames.add(name);
             }
         }
@@ -152,6 +182,11 @@ export class ModuleContainer {
         for (const name of componentNames) {
             const target = componentRegistry.get(name);
             const dependencies = ComponentMetadata.getDependencies(target);
+
+            if (!target) {
+                console.warn(`[ModuleContainer] Component "${name}" not found in registry, skipping...`);
+                continue;
+            }
 
             graph.addNode({
                 name,
@@ -252,8 +287,9 @@ export class ModuleContainer {
     /**
      * Получает все имена Components по модулю
      */
-    getComponentsByModule(moduleName: string) {
-        return moduleComponentsRegistry.get(moduleName);
+    getComponentsByModule(moduleName: string): readonly string[] {
+        const components = moduleComponentsRegistry.get(moduleName);
+        return components ? [...components] : [];
     }
 
     /**
@@ -272,6 +308,10 @@ export class ModuleContainer {
      */
     clear(): void {
         this.container.clear();
+
+        moduleRegistry.clear();
+        componentRegistry.clear();
+        moduleComponentsRegistry.clear();
     }
 }
 

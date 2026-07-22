@@ -5,7 +5,7 @@ import { COMPONENT_CONFIG_KEY, ComponentConfig } from '@/decorators/Component';
 export async function createTestModuleFile(
     dir: string,
     name: string,
-    config: Omit<ModuleConfig, 'name'> = {}
+    config: Partial<Omit<ModuleConfig, 'name'>> = {}
 ): Promise<string> {
     const filePath = `${dir}/${name}.module.js`;
     const content = `
@@ -16,7 +16,6 @@ export async function createTestModuleFile(
                 dependencies: ${JSON.stringify(config.dependencies || [])},
                 enabled: ${config.enabled !== false},
                 version: '${config.version || '1.0.0'}',
-                config: ${JSON.stringify(config.config || null)},
             };
         }
     `;
@@ -32,7 +31,7 @@ interface IComponentConfig extends Omit<ComponentConfig, 'name'> {
 export async function createTestComponentFile(
     dir: string,
     name: string,
-    config: IComponentConfig = {}
+    config: Partial<IComponentConfig> = {}
 ): Promise<string> {
     const methodsCode = Object.entries(config.methods || {})
         .map(([methodName, methodBody]) => {

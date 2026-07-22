@@ -85,61 +85,77 @@ export class ValidateSessionUseCase extends UseCase<ValidateSessionCommand, Vali
         }
 
         try {
-            const refreshTokenPayload = await this.tokenService.verifyRefreshToken(input.refreshToken);
-            const isRefreshTokenExpired = await this.tokenService.isTokenExpired(input.refreshToken);
+            // Если access token невалиден, значит пользователь не авторизован
+            if (!isValidToken || !tokenPayload) {
+                // Обработка ошибок верификации refresh токена
+                let refreshTokenPayload: RefreshTokenPayload | null;
+                try {
+                    refreshTokenPayload = await this.tokenService.verifyRefreshToken(input.refreshToken);
+                } catch (error) {
+                    return this.ok({ isAuthenticated: false, state: "REFRESH_INVALID" });
+                }
 
-            if (isRefreshTokenExpired) {
-                return this.ok({
-                    isAuthenticated: false,
-                    state: "REFRESH_EXPIRED"
-                });
-            }
+                const isRefreshTokenExpired = await this.tokenService.isTokenExpired(input.refreshToken);
 
-            const refreshTokenCommand = RefreshTokenCommand.create({ refreshToken: input.refreshToken });
-            const refreshResult = await this.refreshTokensUseCase.execute(refreshTokenCommand);
+                if (isRefreshTokenExpired) {
+                    return this.ok({
+                        isAuthenticated: false,
+                        state: "REFRESH_EXPIRED"
+                    });
+                }
 
-            if (refreshResult.isFailure) {
-                const error = refreshResult.error;
+                const refreshTokenCommand = RefreshTokenCommand.create({ refreshToken: input.refreshToken });
+                const refreshResult = await this.refreshTokensUseCase.execute(refreshTokenCommand);
 
-                if (error instanceof RefreshTokenError) {
-                    switch (error.code) {
-                        case 'TOKEN_NOT_FOUND':
-                        case 'INVALID_TOKEN':
-                            return this.ok({ isAuthenticated: false, state: "REFRESH_INVALID" });
-                        case 'TOKEN_STOLEN':
-                            return this.ok({ isAuthenticated: false, state: "TOKEN_STOLEN" });
-                        case 'TOKEN_REVOKED':
-                            return this.ok({ isAuthenticated: false, state: "REFRESH_EXPIRED" });
-                        case 'GENERATION_FAILED':
-                            return this.ok({ isAuthenticated: false, state: "UNAUTHENTICATED" });
+                if (refreshResult.isFailure) {
+                    const error = refreshResult.error;
+
+                    if (error instanceof RefreshTokenError) {
+                        switch (error.code) {
+                            case 'TOKEN_NOT_FOUND':
+                            case 'INVALID_TOKEN':
+                                return this.ok({ isAuthenticated: false, state: "REFRESH_INVALID" });
+                            case 'TOKEN_STOLEN':
+                                return this.ok({ isAuthenticated: false, state: "TOKEN_STOLEN" });
+                            case 'TOKEN_REVOKED':
+                                return this.ok({ isAuthenticated: false, state: "REFRESH_EXPIRED" });
+                            case 'GENERATION_FAILED':
+                                return this.ok({ isAuthenticated: false, state: "UNAUTHENTICATED" });
+                        }
                     }
+
+                    return this.ok({
+                        isAuthenticated: false,
+                        state: "UNAUTHENTICATED"
+                    });
                 }
+
+                const accessTokenPayload = await this.tokenService.verifyAccessToken(refreshResult.value.accessToken);
 
                 return this.ok({
-                    isAuthenticated: false,
-                    state: "UNAUTHENTICATED"
-                });
+                    isAuthenticated: true,
+                    state: "REFRESHED",
+                    userId: accessTokenPayload.sub,
+                    accessTokenPayload: accessTokenPayload,
+                    refreshTokenPayload: refreshTokenPayload,
+                    newTokens: {
+                        accessToken: refreshResult.value.accessToken,
+                        accessTokenExpiresIn: refreshResult.value.accessTokenExpiresIn,
+                        refreshToken: refreshResult.value.refreshToken,
+                        refreshTokenExpiresIn: refreshResult.value.refreshTokenExpiresIn,
+                    }
+                })
             }
 
-            const accessTokenPayload = await this.tokenService.verifyAccessToken(refreshResult.value.accessToken);
-
+            // Если access token валиден и refresh token невалиден — возвращаем UNAUTHENTICATED
             return this.ok({
-                isAuthenticated: true,
-                state: "REFRESHED",
-                userId: accessTokenPayload.sub,
-                accessTokenPayload: accessTokenPayload,
-                refreshTokenPayload: refreshTokenPayload,
-                newTokens: {
-                    accessToken: refreshResult.value.accessToken,
-                    accessTokenExpiresIn: refreshResult.value.accessTokenExpiresIn,
-                    refreshToken: refreshResult.value.refreshToken,
-                    refreshTokenExpiresIn: refreshResult.value.refreshTokenExpiresIn,
-                }
-            })
+                isAuthenticated: false,
+                state: 'UNAUTHENTICATED',
+            });
         } catch (error) {
             return this.ok({
                 isAuthenticated: false,
-                state: 'REFRESH_INVALID'
+                state: 'UNAUTHENTICATED'
             });
         }
     }

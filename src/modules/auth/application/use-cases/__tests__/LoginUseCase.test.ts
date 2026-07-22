@@ -1,7 +1,7 @@
-import { Password } from '../../../../core/domain/value-objects/Password';
-import { User } from '../../../../user/domain/entities';
-import { LoginCommand } from '../../commands/LoginCommand';
+import { Email } from '@core/domain/value-objects/Email';
+import { LoginCommand } from '@auth/application/commands/LoginCommand';
 import { LoginUseCase } from '../LoginUseCase';
+import { vi, describe, it, beforeEach, expect } from 'vitest';
 
 interface MockTokens {
     accessToken: string;
@@ -16,62 +16,51 @@ describe('LoginUseCase', () => {
 
     beforeEach(() => {
         mockUserRepository = {
-            findAuthData: (email: string) => Promise.resolve(null),
-            findById: (id: string) => Promise.resolve(null),
-            findByEmail: (email: string) => Promise.resolve(null),
-            delete: () => Promise.resolve()
-        };
-        mockRefreshTokenRepository = {
-            save: () => Promise.resolve(),
-            findByUserIdAndFamilyId: () => Promise.resolve(null)
+            findAuthData: async (email: string) => null,
+            findById: async (id: string) => null,
+            findByEmail: async (email: string) => null,
+            delete: async () => { },
         };
 
-        // Используем объект для корректного вызова getExpiresIn() в тестах (не async как в production)
-        // LoginUseCase ожидает: const refreshExpires = expires.refreshTokenExpiresIn; и затем refreshExpires.seconds
         mockTokenService = {
             getExpiresIn: () => ({
                 accessTokenExpiresIn: { seconds: 3600 },
-                refreshTokenExpiresIn: { seconds: 7200 } // 2 часа для refresh token
+                refreshTokenExpiresIn: { seconds: 7200 },
             }),
             generateTokens: (userId: string): Promise<MockTokens> => Promise.resolve({
                 accessToken: 'test-access-token-' + userId,
                 refreshToken: 'test-refresh-token',
-                familyId: 'family-test-id'
-            })
+                familyId: 'family-test-id',
+            }),
         };
 
-        // Генерируем реальный хеш через bcrypt для корректного verify() API contract
-        const testPassword = Password.create('securePassword123!');
-        const passwordHash = testPassword.value;
-
-        // Mock findAuthData для успешного кейса с правильным passwordHash и API-compatible User object (для verify())
-        mockUserRepository.findAuthData = async (email: string) => {
-            if (email === 'test@example.com') {
-                const user = User.reconstitute({
-                    id: 'test-user-id',
-                    email: 'test@example.com',
-                    username: null,
-                    passwordHash: passwordHash,
-                    avatar: null,
-                    profilePictureUrl: null,
-                    bio: null,
-                    languageCode: 'ru',
-                    countryCode: null,
-                    subscriptionStatus: false,
-                    verificationToken: null,
-                    verificationTokenExpiresAt: null,
-                    roleId: null,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                });
-                return user;
-            }
-            return null;
+        mockRefreshTokenRepository = {
+            save: vi.fn().mockResolvedValue(undefined),
+            findByUserIdAndFamilyId: vi.fn().mockResolvedValue(null),
         };
     });
 
     it('должен успешно выполнить логин с правильными данными', async () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
+
+        // Mock findAuthData для успешного кейса - возвращаем User объект в формате для verify()
+        // Используем UUID для ID вместо Email.create для корректных тестов
+        mockUserRepository.findAuthData = async (email: string) => {
+            if (email === 'test@example.com') {
+                return {
+                    id: 'user-test-id-uuid', // Используем строку как UUID
+                    email: Email.create('test@example.com'),
+                    passwordHash: {
+                        verify: () => true,
+                    },
+                    name: null,
+                    isVerified: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+            }
+            return null;
+        };
 
         const command = LoginCommand.create({
             email: 'test@example.com',
@@ -87,10 +76,13 @@ describe('LoginUseCase', () => {
         expect(result.isSuccess).toBe(true);
         if (result.isSuccess) {
             expect(result.value.accessToken).toBeDefined();
+            expect(result.value.refreshToken).toBeDefined();
+            expect(result.value.expiresIn).toBe(7200);
+            expect(result.value.user.email).toBe('test@example.com');
         }
     });
 
-    it('должен отлавливать ошибку Invalid email в Result.error.error', async () => {
+    it('должен отлавливать ошибку Invalid email в Result.error', async () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
         const command = LoginCommand.create({
             email: 'invalid-email',
@@ -105,16 +97,35 @@ describe('LoginUseCase', () => {
 
         expect(result.isSuccess).toBe(false);
         if (result.isFailure) {
-            const error = result.error;
-            expect(error?.toString()).toContain('Invalid email address');
+            // Error может быть строкой или объектом
+            expect(String(result.error)).toContain('Invalid email address');
         }
     });
 
     it('должен отлавливать ошибку UnauthorizedError: Invalid credentials при неверном пароле', async () => {
         const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
+
+        // Mock findAuthData для успешного кейса с неправильным verify() результатом
+        mockUserRepository.findAuthData = async (email: string) => {
+            if (email === 'test@example.com') {
+                return {
+                    id: 'user-test-id-uuid',
+                    email: Email.create('test@example.com'),
+                    passwordHash: {
+                        verify: () => false, // Невалидный пароль (verify() возвращает false)
+                    },
+                    name: null,
+                    isVerified: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+            }
+            return null;
+        };
+
         const command = LoginCommand.create({
             email: 'test@example.com',
-            password: 'wrongPassword123!', // Неверный пароль (не совпадает с hash в DB)
+            password: 'wrongPassword123!',
             rememberMe: false,
             userAgent: 'test-agent',
             ipAddress: '127.0.0.1',
@@ -125,9 +136,70 @@ describe('LoginUseCase', () => {
 
         expect(result.isSuccess).toBe(false);
         if (result.isFailure) {
-            const error = result.error;
             // LoginUseCase выбрасывает UnauthorizedError с сообщением 'Invalid credentials'
-            expect(error?.toString()).toContain('UnauthorizedError: Invalid credentials');
+            expect(String(result.error)).toContain('UnauthorizedError: Invalid credentials');
         }
+    });
+
+    it('должен возвращать ошибку NotFoundError если пользователь не найден', async () => {
+        const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
+
+        // Mock findAuthData для случая когда пользователь не найден
+        mockUserRepository.findAuthData = async (email: string) => null;
+
+        const command = LoginCommand.create({
+            email: 'nonexistent@example.com',
+            password: 'any-password',
+            rememberMe: false,
+            userAgent: 'test-agent',
+            ipAddress: '127.0.0.1',
+            deviceName: 'TestDevice'
+        });
+
+        const result = await useCase.execute(command);
+
+        expect(result.isSuccess).toBe(false);
+        if (result.isFailure) {
+            // NotFoundError может быть строкой или объектом с кодом
+            expect(String(result.error)).toContain('User not found');
+        }
+    });
+
+    it('должен создавать новый refresh token при успешном входе', async () => {
+        const useCase = new LoginUseCase(mockTokenService as any, mockUserRepository, mockRefreshTokenRepository);
+
+        // Mock findAuthData для успешного кейса
+        mockUserRepository.findAuthData = async (email: string) => {
+            if (email === 'test@example.com') {
+                return {
+                    id: 'user-test-id-uuid',
+                    email: Email.create('test@example.com'),
+                    passwordHash: {
+                        verify: () => true,
+                    },
+                    name: null,
+                    isVerified: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                };
+            }
+            return null;
+        };
+
+        const command = LoginCommand.create({
+            email: 'test@example.com',
+            password: 'securePassword123!',
+            rememberMe: false,
+            userAgent: 'test-agent',
+            ipAddress: '127.0.0.1',
+            deviceName: 'TestDevice'
+        });
+
+        const result = await useCase.execute(command);
+
+        expect(result.isSuccess).toBe(true);
+
+        // Проверка что refreshTokenRepository.save был вызван
+        expect(mockRefreshTokenRepository.save).toHaveBeenCalled();
     });
 });

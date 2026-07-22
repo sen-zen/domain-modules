@@ -447,7 +447,6 @@ describe('ModuleScanner', () => {
             });
 
             await scanner.scan(moduleDir);
-
             expect(scanner.hasModule('DeepModule')).toBe(true);
             expect(container.has('DeepComponent')).toBe(true);
 

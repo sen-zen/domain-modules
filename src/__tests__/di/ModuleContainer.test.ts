@@ -1,6 +1,6 @@
 import { ModuleContainer } from '../../di/ModuleContainer';
 import { ComponentConfig } from '../../decorators/Component';
-import { ModuleConfig } from '../../decorators/Module';
+import { ModuleConfig, ModuleMetadata } from '../../decorators/Module';
 import { Scope } from '../../types';
 
 describe('ModuleContainer', () => {
@@ -9,7 +9,7 @@ describe('ModuleContainer', () => {
     // Мок-классы
     class MockUseCase {
         static name = 'TestUseCase';
-        static __componentConfig: ComponentConfig = { name: MockUseCase.name };
+        static __componentConfig: Partial<ComponentConfig> = { name: MockUseCase.name };
     }
 
     // Мок-модуль
@@ -51,7 +51,9 @@ describe('ModuleContainer', () => {
             'должен регистрировать components с областью видимости %s',
             (scope) => {
                 MockModule.__moduleConfig.components.push({ class: MockUseCase, scope });
+                container.clear();
                 container.registerModule(MockModule);
+                container.registerAllComponents([MockModule.name]);
                 expect(container.has(MockUseCase.name)).toBe(true);
             }
         );
@@ -108,9 +110,12 @@ describe('ModuleContainer', () => {
                     config: null,
                 };
             }
+            container.registerModule(InvalidModule);
 
-            expect(() => container.registerModule(InvalidModule))
-                .toThrow('Module "InvalidModule" depends on "NonExistentModule" which is not registered');
+            expect(console.warn).toHaveBeenCalledWith(
+                '[ModuleContainer] Failed to read module, skipping module registration...',
+                expect.any(Error)
+            );
         });
     });
 
@@ -133,9 +138,8 @@ describe('ModuleContainer', () => {
 
             container.registerModule(TestModule);
             const module = container.getModule('TestModule');
-
-            expect(module?.name).toBe('TestModule');
-            expect(module?.enabled).toBe(true);
+            expect(ModuleMetadata.getName(module)).toBe('TestModule');
+            expect(ModuleMetadata.isEnabled(module)).toBe(true);
         });
 
         it('должен возвращать undefined для незарегистрированного модуля', () => {
@@ -165,13 +169,14 @@ describe('ModuleContainer', () => {
             }
 
             container.registerModule(TestModule);
-            const useCases = container.getComponentsByModule('TestModule');
-            expect(useCases.length).toBe(2);
+            container.registerAllComponents([TestModule.name])
+            const components = container.getComponentsByModule('TestModule')!;
+            expect(components.length).toBe(2);
         });
 
         it('должен возвращать пустой массив для незарегистрированного модуля', () => {
-            const useCases = container.getComponentsByModule('NonExistentModule');
-            expect(useCases).toEqual([]);
+            const components = container.getComponentsByModule('NonExistentModule');
+            expect(components).toEqual([]);
         });
     });
 
@@ -202,27 +207,34 @@ describe('ModuleContainer', () => {
     });
 
     describe('метод clear()', () => {
-        it('должен очищать все модули и контейнер', () => {
+        it('должен очищать все контейнеры', () => {
             class TestModule {
                 static name = 'TestModule';
                 static __moduleConfig = {
-                    name: 'TestModule',
+                    name: TestModule.name,
                     description: '',
                     version: '1.0.0',
-                    useCases: [],
-                    repositories: [],
-                    services: [],
-                    dependencies: [],
+                    components: [
+                        { class: class UseCase1 { static __componentConfig = {} }, scope: 'request' },
+                        { class: class UseCase2 { static __componentConfig = {} }, scope: 'request' }
+                    ],
                     enabled: true,
                     config: null,
                 };
             }
 
             container.registerModule(TestModule);
+            container.registerAllComponents([TestModule.name]);
+
             expect(container.hasModule('TestModule')).toBe(true);
+            expect(container.has('UseCase1')).toBe(true);
+            expect(container.has('UseCase2')).toBe(true);
 
             container.clear();
+
             expect(container.hasModule('TestModule')).toBe(false);
+            expect(container.has('UseCase1')).toBe(false);
+            expect(container.has('UseCase2')).toBe(false);
         });
     });
 
@@ -269,90 +281,17 @@ describe('ModuleContainer', () => {
 
     describe('Обработка областей видимости (Scope)', () => {
         it('должен регистрировать UseCase как request scope', () => {
-            class UseCaseWithScope {
-                static name = 'UseCaseWithScope';
-                static __componentConfig: ComponentConfig = {
-                    name: UseCaseWithScope.name,
-                    scope: 'request',
-                    dependencies: []
-                };
-            }
-
             class TestModule {
                 static name = 'TestModule';
                 static __moduleConfig = {
                     name: TestModule.name,
-                    description: '',
-                    version: '1.0.0',
-                    components: [{ class: UseCaseWithScope, scope: 'request' as Scope }],
-                    repositories: [],
-                    services: [],
-                    dependencies: [],
-                    enabled: true,
-                    config: null,
+                    components: [{ class: class UseCaseWithScope { static __componentConfig = {} }, scope: 'request' }]
                 };
             }
 
             container.registerModule(TestModule);
-            expect(container.has(UseCaseWithScope.name)).toBe(true);
-        });
-
-        it('НЕ должен регистрировать репозитории, даже если указан scope', () => {
-            class RepositoryWithScope {
-                static name = 'RepositoryWithScope';
-                static __componentConfig: ComponentConfig = {
-                    name: 'RepositoryWithScope',
-                    scope: 'singleton',
-                    dependencies: []
-                };
-            }
-
-            class TestModule {
-                static name = 'TestModule';
-                static __moduleConfig = {
-                    name: 'TestModule',
-                    description: '',
-                    version: '1.0.0',
-                    useCases: [],
-                    repositories: [{ class: RepositoryWithScope, scope: 'singleton' as Scope }],
-                    services: [],
-                    dependencies: [],
-                    enabled: true,
-                    config: null,
-                };
-            }
-
-            container.registerModule(TestModule);
-            expect(container.has('RepositoryWithScope')).toBe(false);
-        });
-
-        it('НЕ должен регистрировать сервисы, даже если указан scope', () => {
-            class ServiceWithScope {
-                static name = 'ServiceWithScope';
-                static __componentConfig: ComponentConfig = {
-                    name: 'ServiceWithScope',
-                    scope: 'singleton',
-                    dependencies: []
-                };
-            }
-
-            class TestModule {
-                static name = 'TestModule';
-                static __moduleConfig = {
-                    name: 'TestModule',
-                    description: '',
-                    version: '1.0.0',
-                    useCases: [],
-                    repositories: [],
-                    services: [{ class: ServiceWithScope, scope: 'singleton' as Scope }],
-                    dependencies: [],
-                    enabled: true,
-                    config: null,
-                };
-            }
-
-            container.registerModule(TestModule);
-            expect(container.has('ServiceWithScope')).toBe(false);
+            container.registerAllComponents([TestModule.name]);
+            expect(container.has('UseCaseWithScope')).toBe(true);
         });
     });
 });

@@ -14,9 +14,9 @@ describe('DependencyGraph', () => {
 
     it('сортирует простую цепочку зависимостей', () => {
         graph.addNodes([
-            { name: 'UserModule', dependencies: ['AuthModule', 'CoreModule'], nodeClass: class UserModule { } },
-            { name: 'AuthModule', dependencies: ['CoreModule'], nodeClass: class AuthModule { } },
-            { name: 'CoreModule', dependencies: [], nodeClass: class CoreModule { } },
+            { name: 'UserModule', dependencies: ['AuthModule', 'CoreModule'], class: class UserModule { } },
+            { name: 'AuthModule', dependencies: ['CoreModule'], class: class AuthModule { } },
+            { name: 'CoreModule', dependencies: [], class: class CoreModule { } },
         ]);
 
         const sorted = graph.sort();
@@ -25,10 +25,10 @@ describe('DependencyGraph', () => {
 
     it('сортирует модули с ветвлением', () => {
         graph.addNodes([
-            { name: 'OrderModule', dependencies: ['AuthModule', 'PaymentModule'], nodeClass: class OrderModule { } },
-            { name: 'AuthModule', dependencies: ['CoreModule'], nodeClass: class AuthModule { } },
-            { name: 'PaymentModule', dependencies: ['CoreModule'], nodeClass: class PaymentModule { } },
-            { name: 'CoreModule', dependencies: [], nodeClass: class CoreModule { } },
+            { name: 'OrderModule', dependencies: ['AuthModule', 'PaymentModule'], class: class OrderModule { } },
+            { name: 'AuthModule', dependencies: ['CoreModule'], class: class AuthModule { } },
+            { name: 'PaymentModule', dependencies: ['CoreModule'], class: class PaymentModule { } },
+            { name: 'CoreModule', dependencies: [], class: class CoreModule { } },
         ]);
 
         const sorted = graph.sort();
@@ -42,10 +42,10 @@ describe('DependencyGraph', () => {
 
     it('сортирует модули с одинаковым количеством зависимостей по имени', () => {
         graph.addNodes([
-            { name: 'ModuleC', dependencies: ['Core'], nodeClass: class ModuleC { } },
-            { name: 'ModuleA', dependencies: ['Core'], nodeClass: class ModuleA { } },
-            { name: 'ModuleB', dependencies: ['Core'], nodeClass: class ModuleB { } },
-            { name: 'Core', dependencies: [], nodeClass: class Core { } },
+            { name: 'ModuleC', dependencies: ['Core'], class: class ModuleC { } },
+            { name: 'ModuleA', dependencies: ['Core'], class: class ModuleA { } },
+            { name: 'ModuleB', dependencies: ['Core'], class: class ModuleB { } },
+            { name: 'Core', dependencies: [], class: class Core { } },
         ]);
 
         const sorted = graph.sort();
@@ -55,8 +55,8 @@ describe('DependencyGraph', () => {
 
     it('обнаруживает циклические зависимости', () => {
         graph.addNodes([
-            { name: 'ModuleA', dependencies: ['ModuleB'], nodeClass: class ModuleA { } },
-            { name: 'ModuleB', dependencies: ['ModuleA'], nodeClass: class ModuleB { } },
+            { name: 'ModuleA', dependencies: ['ModuleB'], class: class ModuleA { } },
+            { name: 'ModuleB', dependencies: ['ModuleA'], class: class ModuleB { } },
         ]);
 
         const sorted = graph.sort();
@@ -66,7 +66,7 @@ describe('DependencyGraph', () => {
 
     it('обнаруживает несуществующие зависимости', () => {
         graph.addNodes([
-            { name: 'ModuleA', dependencies: ['NonExistent'], nodeClass: class ModuleA { } },
+            { name: 'ModuleA', dependencies: ['NonExistent'], class: class ModuleA { } },
         ]);
 
         const sorted = graph.sort();
@@ -76,10 +76,10 @@ describe('DependencyGraph', () => {
 
     it('дает стабильный результат при любом порядке добавления', () => {
         const modules = [
-            { name: 'ModuleC', dependencies: ['Core'], nodeClass: class ModuleC { } },
-            { name: 'ModuleA', dependencies: ['Core'], nodeClass: class ModuleA { } },
-            { name: 'ModuleB', dependencies: ['Core'], nodeClass: class ModuleB { } },
-            { name: 'Core', dependencies: [], nodeClass: class Core { } },
+            { name: 'ModuleC', dependencies: ['Core'], class: class ModuleC { } },
+            { name: 'ModuleA', dependencies: ['Core'], class: class ModuleA { } },
+            { name: 'ModuleB', dependencies: ['Core'], class: class ModuleB { } },
+            { name: 'Core', dependencies: [], class: class Core { } },
         ];
 
         const orders = [
@@ -109,9 +109,9 @@ describe('DependencyGraph', () => {
 
     it('обрабатывает модули без зависимостей', () => {
         graph.addNodes([
-            { name: 'ModuleA', dependencies: [], nodeClass: class ModuleA { } },
-            { name: 'ModuleB', dependencies: [], nodeClass: class ModuleB { } },
-            { name: 'ModuleC', dependencies: [], nodeClass: class ModuleC { } },
+            { name: 'ModuleA', dependencies: [], class: class ModuleA { } },
+            { name: 'ModuleB', dependencies: [], class: class ModuleB { } },
+            { name: 'ModuleC', dependencies: [], class: class ModuleC { } },
         ]);
 
         const sorted = graph.sort();
@@ -120,12 +120,12 @@ describe('DependencyGraph', () => {
 
     it('сортирует сложную структуру', () => {
         graph.addNodes([
-            { name: 'ApiModule', dependencies: ['UserModule', 'AuthModule'], nodeClass: class ApiModule { } },
-            { name: 'UserModule', dependencies: ['AuthModule', 'DatabaseModule'], nodeClass: class UserModule { } },
-            { name: 'AuthModule', dependencies: ['CoreModule', 'LoggerModule'], nodeClass: class AuthModule { } },
-            { name: 'DatabaseModule', dependencies: ['CoreModule', 'LoggerModule'], nodeClass: class DatabaseModule { } },
-            { name: 'LoggerModule', dependencies: ['CoreModule'], nodeClass: class LoggerModule { } },
-            { name: 'CoreModule', dependencies: [], nodeClass: class CoreModule { } },
+            { name: 'ApiModule', dependencies: ['UserModule', 'AuthModule'], class: class ApiModule { } },
+            { name: 'UserModule', dependencies: ['AuthModule', 'DatabaseModule'], class: class UserModule { } },
+            { name: 'AuthModule', dependencies: ['CoreModule', 'LoggerModule'], class: class AuthModule { } },
+            { name: 'DatabaseModule', dependencies: ['CoreModule', 'LoggerModule'], class: class DatabaseModule { } },
+            { name: 'LoggerModule', dependencies: ['CoreModule'], class: class LoggerModule { } },
+            { name: 'CoreModule', dependencies: [], class: class CoreModule { } },
         ]);
 
         const sorted = graph.sort();
