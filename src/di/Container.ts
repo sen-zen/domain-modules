@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { componentRegistry } from '@/decorators/Component';
+
 import type {
     Scope,
     CompatibleWith,
@@ -64,6 +66,16 @@ export class Container implements IContainer {
         this.factories.set(key, factory);
         this.scopeMap.set(key, scope);
 
+        if (!componentRegistry.has(key)) {
+            componentRegistry.set(key, {
+                type: 'factory',
+                factory,
+                scope,
+                name: key,
+                dependencies: []
+            });
+        }
+
         if (scope === 'singleton' && this.options.cache) {
             const instance = typeof factory === 'function'
                 ? (factory as () => T)()
@@ -95,6 +107,16 @@ export class Container implements IContainer {
         }
 
         this.scopeMap.set(key, scope);
+
+        if (!componentRegistry.has(key)) {
+            componentRegistry.set(key, {
+                type: 'value',
+                value: value,
+                scope: scope,
+                name: key,
+                dependencies: [],
+            });
+        }
 
         return this;
     }

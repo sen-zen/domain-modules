@@ -31,5 +31,9 @@ export default defineConfig({
     }),
     clean: true,
     outDir: 'dist',
-    external: ['node:fs/promises', 'node:path'],
+    external: [
+        'node:fs/promises',
+        'node:path',
+        'node:url',
+    ],
 });

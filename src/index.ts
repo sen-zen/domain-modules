@@ -1,12 +1,9 @@
-import { ModuleScanner, ModuleContainer, ContainerOptions } from './di';
+import { ModuleContainer, ContainerOptions } from './di';
 
 export async function initializeCore(options: ContainerOptions) {
     const moduleContainer = new ModuleContainer(options);
-    const scanner = new ModuleScanner(moduleContainer);
 
-    await scanner.scan('./modules');
-
-    console.log('[Core] Initialized with', moduleContainer.getAllModules().size, 'modules');
+    moduleContainer.registerAllModules();
 
     return {
         moduleContainer

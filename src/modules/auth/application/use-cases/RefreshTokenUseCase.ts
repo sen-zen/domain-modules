@@ -2,14 +2,24 @@ import type { ITokenService } from '@auth/domain/services/ITokenService';
 import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
 import { RefreshToken } from '@auth/domain/entities/RefreshToken';
 import { RefreshTokenCommand } from '@auth/application/commands/RefreshTokenCommand';
-import { UnauthorizedError, NotFoundError } from '@/errors';
+import { RefreshTokenError } from '@/errors';
 import { Result } from '@/utils/result';
 import { UseCase } from '@core/application';
+import { AuthComponent } from '../../decorator';
 
 export type RefreshTokenResponse = {
     accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
 };
 
+@AuthComponent({
+    dependencies: [
+        'TokenService',
+        'RefreshTokenRepository'
+    ]
+})
 export class RefreshTokenUseCase extends UseCase<RefreshTokenCommand, RefreshTokenResponse> {
     constructor(
         private readonly tokenService: ITokenService,
@@ -20,21 +30,41 @@ export class RefreshTokenUseCase extends UseCase<RefreshTokenCommand, RefreshTok
         const payloadResult = await this.tryCatchAsync(() => this.tokenService.verifyRefreshToken(command.refreshToken));
 
         if (payloadResult.isFailure || !payloadResult.value) {
-            return this.fail(new UnauthorizedError('Invalid or expired refresh token'));
+            return this.fail(new RefreshTokenError(
+                'Invalid or expired refresh token',
+                'INVALID_TOKEN',
+                { error: payloadResult.error }
+            ));
         }
 
         const payload = payloadResult.value;
         const storedTokenResult = await this.tryCatchAsync(() => this.refreshTokenRepository.findByToken(command.refreshToken));
 
         if (storedTokenResult.isFailure || !storedTokenResult.value) {
-            return this.fail(new NotFoundError('Refresh token', 'token', { familyId: payload.familyId }));
+            return this.fail(new RefreshTokenError(
+                'Failed to find refresh token',
+                "TOKEN_NOT_FOUND",
+                {
+                    familyId: payload.familyId,
+                    error: storedTokenResult.error
+                }
+            ));
         }
 
         const storedToken = storedTokenResult.value;
         if (!storedToken.isActive) {
             // Если токен отозван или истек - отзываем всю семью (безопасность)
             await this.refreshTokenRepository.revokeAllByFamilyId(payload.familyId);
-            return this.fail(new UnauthorizedError('Refresh token has been revoked or expired'));
+
+            return this.fail(new RefreshTokenError(
+                'Refresh token has been revoked or expired',
+                'TOKEN_REVOKED',
+                {
+                    familyId: payload.familyId,
+                    userId: payload.sub,
+                    tokenId: storedToken.id
+                }
+            ));
         }
 
         const tokensResult = await this.tryCatchAsync(() => this.tokenService.generateTokens(
@@ -43,7 +73,15 @@ export class RefreshTokenUseCase extends UseCase<RefreshTokenCommand, RefreshTok
         ));
 
         if (tokensResult.isFailure || !tokensResult.value) {
-            return this.fail(tokensResult.error ?? 'Failed to generate tokens');
+            return this.fail(new RefreshTokenError(
+                'Failed to generate new tokens',
+                'GENERATION_FAILED',
+                {
+                    userId: payload.sub,
+                    familyId: payload.familyId,
+                    originalError: tokensResult.error
+                }
+            ));
         }
 
         const tokens = tokensResult.value;
@@ -63,15 +101,26 @@ export class RefreshTokenUseCase extends UseCase<RefreshTokenCommand, RefreshTok
         ));
 
         if (saveResult.isFailure) {
-            return this.fail(saveResult.error);
+            return this.fail(new RefreshTokenError(
+                'Failed to rotate refresh token',
+                'GENERATION_FAILED',
+                {
+                    oldTokenId: storedToken.id,
+                    newTokenId: newRefreshToken.id,
+                    originalError: saveResult.error
+                }
+            ));
         }
 
-        await this.refreshTokenRepository.updateLastUsed(storedToken.id);
+        try {
+            await this.refreshTokenRepository.updateLastUsed(storedToken.id);
+        } catch { }
 
         return Result.ok({
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
-            expiresIn: this.tokenService.getAccessTokenExpiresIn().seconds,
+            accessTokenExpiresIn: this.tokenService.getAccessTokenExpiresIn().seconds,
+            refreshTokenExpiresIn: this.tokenService.getRefreshTokenExpiresIn().seconds
         });
     }
 }

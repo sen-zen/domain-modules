@@ -12,7 +12,8 @@ import type {
 import type {
     LoginUseCase,
     LogoutUseCase,
-    RefreshTokenUseCase
+    RefreshTokenUseCase,
+    ValidateSessionUseCase
 } from '@auth/application';
 
 
@@ -22,6 +23,7 @@ export interface ComponentRegistry {
     LoginUseCase: LoginUseCase;
     LogoutUseCase: LogoutUseCase;
     RefreshTokenUseCase: RefreshTokenUseCase;
+    ValidateSessionUseCase: ValidateSessionUseCase;
 
     // Repositories
     UserRepository: IUserRepository;

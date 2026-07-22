@@ -5,3 +5,4 @@ export * from './NotFoundError';
 export * from './UnauthorizedError';
 export * from './UseCaseError';
 export * from './ValidationError';
+export * from './RefreshTokenError';

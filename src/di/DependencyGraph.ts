@@ -1,7 +1,7 @@
 export interface GraphNode {
     name: string;
+    class: any;
     dependencies: string[];
-    nodeClass: any;
 }
 
 /**
@@ -11,14 +11,14 @@ export class DependencyGraph {
     private nodes: Map<string, GraphNode> = new Map();
 
     addNode = (node: GraphNode) => {
-        if (typeof node !== "object" || node === null || !Object.hasOwn(node, 'nodeClass')) {
+        if (typeof node !== "object" || node === null || !Object.hasOwn(node, 'class')) {
             console.warn('[DependencyGraph] Cannot add null/undefined node');
             return this;
         }
 
-        const name = node.name ?? node.nodeClass.name;
+        const name = node.name ?? node.class.name;
         if (!name) {
-            console.warn('[DependencyGraph] NodeClass has no name');
+            console.warn('[DependencyGraph] Class has no name');
             return this;
         }
 
@@ -53,7 +53,7 @@ export class DependencyGraph {
         }
 
         if (invalid.length) {
-            console.warn('[DependencyGraph] Invalid dependencies detected:', invalid);
+            console.warn('[DependencyGraph] Invalid dependencies detected:', invalid, inDegree);
             return [];
         }
 

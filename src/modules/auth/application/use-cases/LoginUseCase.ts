@@ -11,6 +11,7 @@ import type { Result } from '@/utils/result';
 import type { ITokenService } from '@auth/domain/services/ITokenService';
 import type { IUserRepository } from '@user/domain/repositories/IUserRepository';
 import type { IRefreshTokenRepository } from '@auth/domain/repositories/IRefreshTokenRepository';
+import { AuthComponent } from '../../decorator';
 
 type UserLoginResponse = {
     id: string;
@@ -27,7 +28,13 @@ export type LoginResponse = {
     expiresIn: number,
 }
 
-@Component()
+@AuthComponent({
+    dependencies: [
+        'TokenService',
+        'UserRepository',
+        'RefreshTokenRepository'
+    ]
+})
 export class LoginUseCase extends UseCase<LoginCommand, LoginResponse> {
     constructor(
         private readonly tokenService: ITokenService,

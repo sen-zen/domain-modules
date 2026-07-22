@@ -1,7 +1,8 @@
+import { DependencyGraph } from './DependencyGraph';
 import { Container, type ContainerOptions } from './Container';
-import { ComponentMetadata } from '@/decorators/Component';
-import { ModuleMetadata } from '@/decorators/Module';
-import { Scope, ComponentRegistry } from "@/types";
+import { moduleRegistry, ModuleMetadata, moduleComponentsRegistry } from '@/decorators/Module';
+import { componentRegistry, ComponentMetadata } from '@/decorators/Component';
+import type { Scope, ComponentRegistry } from "@/types";
 
 export interface ModuleInfo {
     name: string;
@@ -26,15 +27,17 @@ export interface ModuleItem<T = any> {
  */
 export class ModuleContainer {
     private static instance: ModuleContainer;
-    private modules: Map<string, ModuleInfo> = new Map();
     private container: Container;
+    private options: ContainerOptions;
 
     constructor(options: ContainerOptions = {}) {
-        this.container = new Container({
+        this.options = {
             log: false,
             cache: true,
             ...options
-        });
+        }
+
+        this.container = new Container(this.options);
     }
 
     static getInstance(): ModuleContainer {
@@ -61,76 +64,142 @@ export class ModuleContainer {
     }
 
     /**
-     * Регистрирует модуль с декораторами или тестовыми метаданными
+     * Автоматически регистрирует все модули из глобального реестра
      */
-    registerModule = (moduleClass: any) => {
-        const name = ModuleMetadata.getName(moduleClass);
-        const components = ModuleMetadata.getComponents(moduleClass);
-        const dependencies = ModuleMetadata.getDependencies(moduleClass);
-        const enabled = ModuleMetadata.isEnabled(moduleClass);
-        const version = ModuleMetadata.getVersion(moduleClass);
-        const config = ModuleMetadata.getConfig(moduleClass);
+    registerAllModules(): void {
+        const graph = new DependencyGraph();
 
-        try {
-            for (const dep of dependencies) {
-                if (!this.modules.has(dep)) {
-                    throw new Error(`Module "${name}" depends on "${dep}" which is not registered`);
-                }
-            }
+        if (this.options.log) {
+            console.info(`[ModuleContainer] Автоматически регистрирует все Modules из реестра`);
+        }
 
-            this.modules.set(name, {
-                class: moduleClass,
+        for (const [name, target] of moduleRegistry) {
+            const dependencies = ModuleMetadata.getDependencies(target);
+
+            graph.addNode({
                 name,
-                components,
-                dependencies,
-                enabled,
-                version,
-                config
+                class: target,
+                dependencies: dependencies,
             });
-
-            for (const component of components) {
-                this.registerComponent(component);
-            }
-        } catch (error) {
-            // Если декораторы недоступны или ошибка чтения метаданных - игнорируем
-            if ((error as Error).message?.includes('Metadata')) {
-                console.warn(`[ModuleContainer] Failed to read metadata, skipping module registration...`);
-            } else {
-                throw error;
-            }
-        }
-    }
-
-    registerComponent(component: any = {}) {
-        const componentClass = component.class || component;
-        const componentName = ComponentMetadata.getName(componentClass);
-
-        if (this.container.has(componentName)) {
-            console.warn(`[ModuleContainer] "${componentName}" already registered, skipping...`);
-            return;
         }
 
-        try {
-            const scope = component.scope || ComponentMetadata.getScope(componentClass) || 'request';
-            const dependencies = component.dependencies || ComponentMetadata.getDependencies(componentClass);
-
-            this.container.setFactory(componentName, () => {
-                const resolvedDeps = dependencies.map((depName: string) => {
-                    return this.container.get(depName);
-                });
-
-                return new componentClass(...resolvedDeps);
-            }, scope as Scope);
-        } catch (error) {
-            console.warn(`[ModuleContainer] "${componentName}" failed to read metadata, skipping module registration...`, error);
+        for (const node of graph.sort()) {
+            this.registerModule(node.class);
         }
     }
 
     /**
-     * Получает модуль
+     * Регистрирует модуль
      */
-    getModule(name: string): ModuleInfo | undefined {
-        return this.modules.get(name);
+    registerModule = (moduleClass: any) => {
+        const name = ModuleMetadata.getName(moduleClass);
+        const moduleDependencies = ModuleMetadata.getDependencies(moduleClass);
+
+        if (this.options.log) {
+            console.info(`[ModuleContainer] 📦 Регистрация модуля: ${name}`);
+        }
+
+        try {
+            for (const moduleDep of moduleDependencies) {
+                if (!moduleRegistry.has(moduleDep)) {
+                    throw new Error(
+                        `Module "${name}" depends on module "${moduleDep}" which is not registered. ` +
+                        `Please ensure "${moduleDep}" is imported before "${name}".`
+                    );
+                }
+            }
+
+            if (!moduleRegistry.has(name)) {
+                moduleRegistry.set(name, moduleClass);
+            }
+        } catch (error) {
+            console.warn(`[ModuleContainer] Failed to read module, skipping module registration...`, error);
+        }
+    }
+
+    /**
+     * Регистрация компонентов (экземпляры)
+     */
+    registerAllComponents(
+        modules: string[] = Array.from(moduleRegistry.keys()),
+        options: { includeGlobal?: boolean } = {}
+    ): void {
+        const graph = new DependencyGraph();
+        const componentNames = new Set<string>(
+            options.includeGlobal ? componentRegistry.keys() : []
+        );
+
+        if (this.options.log) {
+            console.info(`[ModuleContainer] Автоматически регистрирует все Components из реестра`);
+        }
+
+        for (const moduleName of modules) {
+            if (!moduleRegistry.has(moduleName)) {
+                console.warn(`[ModuleContainer] Module "${moduleName}" not found, skipping...`);
+                continue;
+            }
+
+            const names = moduleComponentsRegistry.get(moduleName);
+            if (!names) {
+                continue;
+            }
+
+            for (const name of names) {
+                componentNames.add(name);
+            }
+        }
+
+        for (const name of componentNames) {
+            const target = componentRegistry.get(name);
+            const dependencies = ComponentMetadata.getDependencies(target);
+
+            graph.addNode({
+                name,
+                class: target,
+                dependencies: dependencies,
+            });
+        }
+
+        for (const node of graph.sort()) {
+            this.registerComponent(node.class);
+        }
+    }
+
+    /**
+     * Регистрирует компонент
+     */
+    registerComponent(component: any) {
+        const componentName = ComponentMetadata.getName(component);
+        const componentScope = ComponentMetadata.getScope(component);
+        const componentDependencies = ComponentMetadata.getDependencies(component);
+
+        if (this.container.has(componentName)) {
+            if (this.options.log) {
+                console.warn(`[ModuleContainer] "${componentName}" already registered, skipping...`);
+            }
+            return;
+        }
+
+        if (this.options.log) {
+            console.info(`[ModuleContainer] 📦 Регистрация компонента: ${componentName}`);
+        }
+
+        try {
+            this.container.setFactory(
+                componentName,
+                () => {
+                    const resolvedDeps = componentDependencies.map(n => this.container.get(n));
+                    return new component(...resolvedDeps);
+                },
+                componentScope
+            );
+
+            if (!componentRegistry.has(componentName)) {
+                componentRegistry.set(componentName, component);
+            }
+        } catch (error) {
+            console.warn(`[ModuleContainer] "${componentName}" failed to read metadata, skipping module registration...`, error);
+        }
     }
 
     /**
@@ -160,43 +229,48 @@ export class ModuleContainer {
     }
 
     /**
+     * Проверяет, зарегистрирован ли модуль
+     */
+    hasModule(name: string) {
+        return moduleRegistry.has(name);
+    }
+
+    /**
      * Возвращает все модули
      */
-    getAllModules(): Map<string, ModuleInfo> {
-        return this.modules;
+    getAllModules() {
+        return moduleRegistry;
     }
 
     /**
-     * Получает все UseCase по модулю
+     * Получает модуль
      */
-    getComponentsByModule(moduleName: string): any[] {
-        const module = this.modules.get(moduleName);
-        return module ? module.components : [];
+    getModule(moduleName: string) {
+        return moduleRegistry.get(moduleName);
     }
 
     /**
-     * Возвращает UseCase по имени
+     * Получает все имена Components по модулю
      */
-    getComponent<T>(name: string): T {
+    getComponentsByModule(moduleName: string) {
+        return moduleComponentsRegistry.get(moduleName);
+    }
+
+    /**
+     * Возвращает Components по имени
+     */
+    getComponent<T>(name: string) {
         return this.container.get<T>(name);
     }
 
-    runInRequestScope<T>(fn: () => T): T {
-        return this.container.runInRequestScope(fn);
-    }
-
-    /**
-     * Проверяет, зарегистрирован ли модуль
-     */
-    hasModule(name: string): boolean {
-        return this.modules.has(name);
+    runInRequestScope<T>(fn: () => T) {
+        return this.container.runInRequestScope<T>(fn);
     }
 
     /**
      * Очищает все модули (для тестов)
      */
     clear(): void {
-        this.modules.clear();
         this.container.clear();
     }
 }

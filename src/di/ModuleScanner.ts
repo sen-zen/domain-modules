@@ -94,7 +94,7 @@ export class ModuleScanner {
 
             modules.forEach(({ module, moduleDir }) => {
                 graph.addNode({
-                    nodeClass: module,
+                    class: module,
                     name: ModuleMetadata.getName(module),
                     dependencies: ModuleMetadata.getDependencies(module)
                 });
@@ -114,7 +114,7 @@ export class ModuleScanner {
             const sortedModules = graph.sort();
 
             for (const node of sortedModules) {
-                this.registerModule(node.nodeClass);
+                this.registerModule(node.class);
             }
 
             const componentGraph = new DependencyGraph();
@@ -128,7 +128,7 @@ export class ModuleScanner {
 
             components.forEach(({ module }) => {
                 componentGraph.addNode({
-                    nodeClass: module,
+                    class: module,
                     name: ComponentMetadata.getName(module),
                     dependencies: ComponentMetadata.getDependencies(module)
                 });
@@ -140,7 +140,7 @@ export class ModuleScanner {
 
             const sortedComponent = componentGraph.sort();
             for (const node of sortedComponent) {
-                this.registerComponent(node.nodeClass);
+                this.registerComponent(node.class);
             }
 
             return this;
